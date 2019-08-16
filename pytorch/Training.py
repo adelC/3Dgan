@@ -35,7 +35,7 @@ def training():
    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.00001, alpha= 0.9)
 
    base_path = "/bigdata/shared/LCD/NewV1/" # fixed angle
-   MODEL_STORE_PATH = "results/1layer/"
+   MODEL_STORE_PATH = "results/1layer_rmpsprop_100epochs/"
    safe_mkdir(MODEL_STORE_PATH)
    modelfile = 'model/simple_1layer_rmsprop.ckpt'
    safe_mkdir(MODEL_STORE_PATH + 'model/') 
@@ -49,7 +49,7 @@ def training():
    batch_size = 128
    train_ratio = 0.9
    shuffle=False
-   num_epochs = 30
+   num_epochs = 100
 
    n_classes = len(particle)
    # gather sample files for each type of particle                                                                                                
