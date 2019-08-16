@@ -5,12 +5,22 @@ import time
 import torch
 import torch.nn.functional as F
 #from torchsummary import summary
-from architectures.simple_dropout import CNNsimple
+from architectures.simple_1layer import CNNsimple
 
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
+def safe_mkdir(path):
+   #Safe mkdir (i.e., don't create if already exists,and no violation of race conditions)                                                                                                                                                             
+    from os import makedirs
+    from errno import EEXIST
+    try:
+        makedirs(path)
+    except OSError as exception:
+        if exception.errno != EEXIST:
+          raise exception
 
 def mape(pred, target):
    loss = torch.mean(torch.abs(target-pred)/target)
@@ -25,9 +35,12 @@ def training():
    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.00001, alpha= 0.9)
 
    base_path = "/bigdata/shared/LCD/NewV1/" # fixed angle
-   MODEL_STORE_PATH = "model/"
-   modelfile = 'conv_net_model_simple.ckpt' 
-   history = 'loss_history_simple.pkl'
+   MODEL_STORE_PATH = "results/1layer/"
+   safe_mkdir(MODEL_STORE_PATH)
+   modelfile = 'model/simple_1layer_rmsprop.ckpt'
+   safe_mkdir(MODEL_STORE_PATH + 'model/') 
+   history = 'history/loss_history_simple_1layer_rmsprop.pkl'
+   safe_mkdir(MODEL_STORE_PATH + 'history/')
    particle =['Ele'] # particle types                                                                                                      
    sample_path = []
    for p in particle:
@@ -65,6 +78,7 @@ def training():
    test_loss_list = []
    
    for epoch in range(num_epochs):
+     init=time.time()
      # data generator for train files      
      train_loader = HDF5generator(train_files, batch_size=batch_size, shuffle=shuffle, num_events=180000) 
      total_batches = train_loader.total_batches
@@ -93,6 +107,7 @@ def training():
          loss_list.append(loss.item())
        test_loss_list.append(np.mean(loss_list))    
      print('Test loss of the model on the 20000 test images: {} %'.format((loss.item())))
+     print('The epoch {} took {} seconds.'.format(epoch, time.time()-init))
      pickle.dump({'train': train_loss_list, 'test': test_loss_list}, open(MODEL_STORE_PATH + history, 'wb'))
      # Save the model and plot
      torch.save(model.state_dict(), MODEL_STORE_PATH + modelfile)
