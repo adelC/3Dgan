@@ -76,7 +76,7 @@ def training():
    loss_list=[]
    train_loss_list = []
    test_loss_list = []
-   
+   train_files = train_files[:2]
    for epoch in range(num_epochs):
      init=time.time()
      # data generator for train files      
