@@ -35,7 +35,7 @@ def training():
    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.00001, alpha= 0.9)
 
    base_path = "/bigdata/shared/LCD/NewV1/" # fixed angle
-   MODEL_STORE_PATH = "results/1layer_rmpsprop_100epochs/"
+   MODEL_STORE_PATH = "results/1layer_rmpsprop_100epochs_reduced/"
    safe_mkdir(MODEL_STORE_PATH)
    modelfile = 'model/simple_1layer_rmsprop.ckpt'
    safe_mkdir(MODEL_STORE_PATH + 'model/') 
