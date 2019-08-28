@@ -49,7 +49,7 @@ def training():
    batch_size = 128
    train_ratio = 0.9
    shuffle=False
-   num_epochs = 100
+   num_epochs = 1000
 
    n_classes = len(particle)
    # gather sample files for each type of particle                                                                                                
