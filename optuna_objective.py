@@ -31,8 +31,8 @@ def optuna_objective(trial, args, config):
     args = optuna_override_undefined(args, trial)
 
     # Importing modules by name for the generator and discriminator
-    discriminator = importlib.import_module(f'networks.pgan.{args.architecture}.discriminator').discriminator    #anglepgan ecall
-    generator = importlib.import_module(f'networks.pgan.{args.architecture}.generator').generator   #anglepgan ecall
+    discriminator = importlib.import_module(f'networks.pgan.{args.architecture}.discriminator').discriminator    #anglepgan#emmac
+    generator = importlib.import_module(f'networks.pgan.{args.architecture}.generator').generator   #anglepgan#emmac
 
     # Set verbosity:
     verbose = get_verbosity(args.horovod, args.optuna_distributed)
@@ -58,16 +58,16 @@ def optuna_objective(trial, args, config):
     base_dim = args.first_conv_nfilters    #TODO check that param is passed, its diff in anglegan
 
     if verbose:
-        print(f"Start resolution: {start_resolution}")   #anglepgan ach
-        print(f"Final resolution: {final_resolution}")   #anglepgan ach
-        print(f"Deduced number of phases: {num_phases}") #anglepgan ach
+        print(f"Start resolution: {start_resolution}")   #anglepgan#ach
+        print(f"Final resolution: {final_resolution}")   #anglepgan#ach
+        print(f"Deduced number of phases: {num_phases}") #anglepgan#ach
         print(f"Deduced number of phases: {get_num_phases(args.start_shape, args.final_shape)}")
         print(f"base_dim: {base_dim}")
 
     var_list = list()
     global_step = 0
     
-    # anglepgan - ach
+    #anglepgan#ach
     en_path = os.path.join(args.dataset_path, f'en/')
     ang_path = os.path.join(args.dataset_path, 'ang/')
     ecal_path = os.path.join(args.dataset_path, 'ecal/')
@@ -91,45 +91,45 @@ def optuna_objective(trial, args, config):
         # DATASET
 
         # Get NumpyPathDataset object for current phase. It's an iterable object that returns the path to samples in the dataset
-        # caspar method (TODO check) - npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        # caspar method (#TODO check) - npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
         size = start_resolution * (2 ** (phase - 1))
        
-        # anglepgan ach
+        #anglepgan#ach
         data_path = os.path.join(args.dataset_path, f'{size}x{size}/')
         
-        # anglepgan ach
+        #anglepgan#ach
         npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
-        # anglepgan ach
+        #anglepgan#ach
         npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
-        # anglepgan ach
+        #anglepgan#ach
         npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
-        # anglepgan ach
+        #anglepgan#ach
         npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
-        # anglepgan ach
+        #anglepgan#ach
         if verbose:
             print(f'Phase {phase}: reading data from dir {data_path}')
         npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
                                     
-        # CASPAR TODO: we should probably split the npy_data in a train and validation set. The validation set can then be passed to save_metrics to compute the metrics on.
+        #CASPAR #TODO: we should probably split the npy_data in a train and validation set. The validation set can then be passed to save_metrics to compute the metrics on.
 
         # Get DataLoader
         batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
 
         if phase >= args.starting_phase:
-            print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan ach
+            print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan#ach
             assert batch_size * global_size <= args.max_global_batch_size    #CASPAR has this commented out
             if verbose:
                 print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
 
-        #anglepgan ach
+        #anglepgan#ach
         current_shape = [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in
                                                        base_shape[1:]]]
-        #anglepgan ach
+        #anglepgan#ach
         if verbose:
             print(f'base_shape: {base_shape}, current_shape: {current_shape}')
 
@@ -140,13 +140,13 @@ def optuna_objective(trial, args, config):
         # Create input tensor
         real_image_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
 
-        # anglepgan ach
+        #anglepgan#ach
         e_p_shape = [batch_size, 1]
         ang_shape = [batch_size, 1]
         e_p = tf.placeholder(shape=e_p_shape, dtype=tf.float32)
         ang = tf.placeholder(shape=ang_shape, dtype=tf.float32)
 
-        # anglepgan ach
+        #anglepgan#ach
         real_label = None
         if real_label is not None:
             real_label = tf.one_hot(real_label, depth=args.num_labels)
@@ -176,7 +176,7 @@ def optuna_objective(trial, args, config):
         # Turn arguments into constant Tensors - #TODO - check my g=g and d=d fix (diff in caspar's code)
         g_lr_max = tf.constant(args.g_lr, tf.float32)
         d_lr_max = tf.constant(args.d_lr, tf.float32)
-        # TODO - anglepgan ach has rise_niter and decay_niter that is taken out (lines 231-234) I think for optuna?
+        #TODO - #anglepgan#ach has rise_niter and decay_niter that is taken out (lines 231-234) I think for optuna?
         steps_per_phase = tf.constant(args.mixing_nimg + args.stabilizing_nimg)
 
         update_g_lr = opt.lr_update(lr = g_lr, intra_phase_step = intra_phase_step, 
@@ -211,7 +211,7 @@ def optuna_objective(trial, args, config):
         assign_starting_alpha = alpha.assign(args.starting_alpha)
         assign_zero = alpha.assign(0)
         
-        # Caspar changes structure and uses new helper functions like get_num_phases TODO check this runs smoothly
+        #Caspar changes structure and uses new helper functions like get_num_phases #TODO check this runs smoothly
         # Performs a forward pass, computes gradients, clips them (if desired), and then applies them.
         # Supports simultaneous forward pass of generator and discriminator, or alternatingly (discriminator first)
         train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm = opt.optimize_step(
@@ -245,7 +245,7 @@ def optuna_objective(trial, args, config):
         gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
         
-        #TODO - check Caspar's removal of main.py lines 300-388 
+        #TODO - check #Caspar's removal of main.py lines 300-388 
         
         ema = tf.train.ExponentialMovingAverage(decay=args.ema_beta)
         ema_op = ema.apply(gen_vars)
@@ -282,7 +282,7 @@ def optuna_objective(trial, args, config):
         # Other ops
         
         init_op = tf.global_variables_initializer()
-        #TODO check Caspar's removal of assign_starting_alpha and assign_zero
+        #TODO check #Caspar's removal of assign_starting_alpha and assign_zero
         # Probably these alpha ops could be with the other ops above, but... it changes reproducibility of my runs. So for now, I'll leave them here.
 
         broadcast = hvd.broadcast_global_variables(0)
@@ -293,7 +293,7 @@ def optuna_objective(trial, args, config):
             # sess.graph.finalize()
             sess.run(init_op)
             
-            # Caspar cut this section down a lot TODO check that it runs smoothly (adel/pgan/main l484-504)
+            #Caspar cut this section down a lot #TODO check that it runs smoothly (adel/pgan/main l484-504)
             # Do variables need to be restored? (either from the previous phase, or from a previous run)
             if (phase > args.starting_phase) or (args.continue_path and phase == args.starting_phase):
                 restore_variables(sess, phase, args.starting_phase, logdir, args.continue_path, var_list, verbose)
@@ -327,7 +327,7 @@ def optuna_objective(trial, args, config):
             local_step = 0
             # take_first_snapshot = True
             
-            # TODO check optuna stuff is working
+            #TODO check optuna stuff is working
             if args.optuna_distributed:
                 print(f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}")
             else:
@@ -336,7 +336,7 @@ def optuna_objective(trial, args, config):
             # ------------------------------------------------------------------------------------------#
             # Training loop for mixing phase
             
-            # Caspar added TODO check it works
+            #Caspar added #TODO check it works
             # Do we start with a mixing phase? (normally we do, unless we resume e.g. from a point in the stabilization phase)
             if args.mixing_nimg > 0:
                 mixing_bool = True
@@ -369,7 +369,7 @@ def optuna_objective(trial, args, config):
                 batch = np.stack([np.load(path) for path in batch_paths])
                 batch = batch[:, np.newaxis, ...]#.astype(np.float32) / 1024 - 1
 
-                # anglepgan begin
+                #anglepgan#ach begin
                 batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
                 batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
                 batch_en = np.stack([np.load(path) for path in batch_paths_en])
@@ -384,9 +384,9 @@ def optuna_objective(trial, args, config):
                 batch_paths_ecal = npy_ecal[batch_loc_ecal: batch_loc_ecal + batch_size]
                 batch_ecal = np.stack([np.load(path) for path in batch_paths_ecal])
                 batch_ecal = batch_ecal[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-                # anglepgan end
+                #anglepgan#ach end
 
-                #COMMENTED THIS OUT, TODO CHECK - bc sofia said normalizing may mess with our data bc of the wide range of values
+                #COMMENTED THIS OUT, #TODO CHECK - bc sofia said normalizing may mess with our data bc of the wide range of values
                 # Normalize data (but only if args.data_mean AND args.data_stddev are defined)
                 #batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
 
