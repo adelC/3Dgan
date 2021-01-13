@@ -17,11 +17,13 @@ def forward_generator(generator,
                       leakiness,
                       network_size,
                       loss_fn,
-                      loss_weights,
-                      e_p,
-                      ang,
+                      loss_weights,     #anglepgan#emmac
+                      e_p,              #anglepgan#emmac
+                      ang,              #anglepgan#emmac   
+                      noise_stddev,     #TODO
                       is_reuse=False
                       ):
+    #anglepgan#emmac START
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
@@ -30,15 +32,18 @@ def forward_generator(generator,
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
     z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)
-
+    #anglepgan#emmac END
+    
     gen_sample = generator(z, alpha, phase, num_phases,
                            base_dim, base_shape, activation=activation,
                            param=leakiness, size=network_size, is_reuse=is_reuse)
+    
+    #TODO - understand this and find noise value for cern data
+    # Add instance noise to make training more stable. See e.g. https://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/
+    #real_image_input = real_image_input + tf.random.normal(tf.shape(real_image_input)) * noise_stddev
+    gen_sample_noisy = gen_sample #+ tf.random.normal(shape=tf.shape(gen_sample)) * noise_stddev
 
-    #anglepgan - commenting the normalization
-    #gen_sample = gen_sample + tf.random.normal(shape=tf.shape(gen_sample)) * 0.01
-
-    # Generator training.
+    # Generator training. #anglepgan#emmac
     disc_fake_g, fake_ecal, fake_ang = discriminator(gen_sample, alpha, phase, num_phases, base_shape, base_dim, latent_dim,
                                 activation=activation, param=leakiness, size=network_size, is_reuse=is_reuse)
     if loss_fn == 'wgan':
@@ -46,9 +51,11 @@ def forward_generator(generator,
 
     elif loss_fn == 'logistic':
         gen_loss = tf.reduce_mean(tf.nn.softplus(-disc_fake_g))
-
-    elif loss_fn == 'anglegan':
-        gen_loss = tf.reduce_mean(-disc_fake_g) # TODO
+  
+  #anglepgan#emmac#ach
+  elif loss_fn == 'anglegan':
+        gen_loss = tf.reduce_mean(-disc_fake_g) #TODO
+      
     else:
         raise ValueError(f"Unknown loss function: {loss_fn}")
 
@@ -68,12 +75,16 @@ def forward_discriminator(generator,
                           leakiness,
                           network_size,
                           loss_fn,
-                          loss_weights,
                           gp_weight,
-                          e_p,
-                          ang,
+                          noise_stddev,   #TODO
+                          loss_weights,   #anglepgan#emmac
+                          gp_weight,      #anglepgan#emmac
+                          e_p,            #anglepgan#emmac
+                          ang,            #anglepgan#emmac
                           is_reuse=False,
                           ):
+    
+    #anglepgan#emmac START
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
@@ -82,40 +93,42 @@ def forward_discriminator(generator,
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
     z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)
-
+    #anglepgan#emmac END    
+    
     gen_sample = generator(z, alpha, phase, num_phases,
                            base_dim, base_shape, activation=activation,
                            param=leakiness, size=network_size, is_reuse=is_reuse)
-
-    #anglepgan commenting the normalization
-    #gen_sample = gen_sample + tf.random.normal(shape=tf.shape(gen_sample)) * 0.01
+    
+    #TODO - understand this and find noise value for cern data
+    # Add instance noise to make training more stable. See e.g. https://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/
+    #real_image_input = real_image_input + tf.random.normal(tf.shape(real_image_input)) * noise_stddev
+    gen_sample_noisy = gen_sample #+ tf.random.normal(shape=tf.shape(gen_sample)) * noise_stddev
 
     # Discriminator Training
-    disc_fake_d, fake_ecal, fake_ang = discriminator(tf.stop_gradient(gen_sample), alpha, phase, num_phases, base_shape,
-                                base_dim, latent_dim, activation=activation, param=leakiness,
+    disc_fake_d = discriminator(tf.stop_gradient(gen_sample_noisy), alpha, phase, num_phases,
+                                base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                                 size=network_size, )
-    disc_real, real_ecal, real_ang = discriminator(real_image_input, alpha, phase, num_phases, base_shape,
-                              base_dim, latent_dim, activation=activation, param=leakiness,
+    disc_real = discriminator(real_image_input, alpha, phase, num_phases,
+                              base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                               is_reuse=True, size=network_size, )
 
     gamma = tf.random_uniform(shape=[tf.shape(real_image_input)[0], 1, 1, 1, 1], minval=0., maxval=1.)
-    interpolates = gamma * real_image_input + (1 - gamma) * tf.stop_gradient(gen_sample)
+    interpolates = gamma * real_image_input + (1 - gamma) * tf.stop_gradient(gen_sample_noisy)
+    
+    #anglepgan#ach
     disc_fake_d2, fake_ecal2, fake_ang2 = discriminator(interpolates, alpha, phase,
                                            num_phases, base_shape, base_dim, latent_dim,
                                            is_reuse=True, activation=activation,
                                            param=leakiness, size=network_size, )
     gradients = tf.gradients(disc_fake_d2, [interpolates])[0]
+
     slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=(1, 2, 3, 4)))
-
-
-
+    
+    #anglepgan#ach
     print(f"ANGLEPGAN DEBUG ### : disc_fake_d={disc_fake_d}, disc_fake_d.shape={disc_fake_d.shape}")
     print(f"ANGLEPGAN DEBUG ### : gradients={gradients}, gradients.shape={gradients.shape}")
     print(f"ANGLEPGAN DEBUG ### : slopes={slopes}, slopes.shape={slopes.shape}")
 
-
-
-    # wasserstein gan
     if loss_fn == 'wgan':
         # has the real/fake activation layer built in, as a critic that rates. Allows you to move far away and still get a good gradient
         gradient_penalty = (slopes - 1) ** 2
@@ -128,11 +141,12 @@ def forward_discriminator(generator,
         gradient_penalty = tf.reduce_mean(slopes ** 2)
         gp_loss = gp_weight * gradient_penalty
         disc_loss = tf.reduce_mean(tf.nn.softplus(disc_fake_d)) + tf.reduce_mean(
-            tf.nn.softplus(-disc_real)) ## TODO - To check
+            tf.nn.softplus(-disc_real)) #TODO check
         disc_loss += gp_loss
 
-    elif loss_fn == 'anglegan':   # NEEDS TO BE TESTED + DEBUGGED!!
-        fake_loss = bce(disc_real, disc_fake_d)     # NOT SURE!! CHECK!
+    #anglepgan#emmac#ach START
+    elif loss_fn == 'anglegan':   #TODO NEEDS TO BE TESTED + DEBUGGED!!
+        fake_loss = bce(disc_real, disc_fake_d)  
         # need to use ecal_angle() in conditional lambda layer (in d) to find ang_output/ang_target
         ang_loss = mae(real_ang, fake_ang)  # DO I NEED TO SWITCH THE ORDER OF THE REAL AND FAKE ANGS?!!
         # need to use ecal_sum() in conditional lambda layer (in d) to find ecal_output/ecal_target
@@ -142,9 +156,10 @@ def forward_discriminator(generator,
         loss_weights = loss_weights.numpy() # make sure pgan weight vector is a np.array
         disc_loss = np.dot(loss_weights, losses)  # weight and sum the losses
 
-        gp_loss = gp_weight * gradient_penalty   #HOW TO IMPLEMENT THIS???
-        disc_loss += gp_loss    #HOW TO IMPLEMENT THIS???
-
+        gp_loss = gp_weight * gradient_penalty   
+        disc_loss += gp_loss    
+        #anglepgan#emmac#ach
+        
     else:
         raise ValueError(f"Unknown loss function: {loss_fn}")
 
@@ -163,13 +178,15 @@ def forward_simultaneous(generator,
                          activation,
                          leakiness,
                          network_size,
-                         loss_fn,
-                         loss_weights,
+                         loss_weights,     #anglepgan#emmac
                          gp_weight,
-                         e_p,
-                         ang,
+                         e_p,     #anglepgan#emmac
+                         ang,     #anglepgan#emmac
+                         noise_stddev,
                          conditioning=None
                          ):
+    
+    #anglepgan#emmac#ach START
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
@@ -177,44 +194,38 @@ def forward_simultaneous(generator,
     ang_tensor = tf.reshape(ang, [z_batch_size,1])   # need z_batch_size x 1
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)
-
-    gen_sample = generator(z, alpha, phase, num_phases,
+    z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)    gen_sample = generator(z, alpha, phase, num_phases,
                            base_dim, base_shape, activation=activation,
                            param=leakiness, size=network_size, conditioning=conditioning)
+    #anglepgan#emmac#ach END
+    
+    #TODO - understand this and find noise value for cern data
+    # Add instance noise to make training more stable. See e.g. https://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/
+    #real_image_input = real_image_input + tf.random.normal(tf.shape(real_image_input)) * noise_stddev
+    gen_sample_noisy = gen_sample #+ tf.random.normal(shape=tf.shape(gen_sample)) * noise_stddev
 
-    #anglepgan - commenting the normalization
-    #gen_sample = gen_sample + tf.random.normal(shape=tf.shape(gen_sample)) * 0.01
-    # Discriminator Training
-    disc_fake_d, fake_ecal, fake_ang = discriminator(tf.stop_gradient(gen_sample), alpha, phase, num_phases, base_shape,
-                                base_dim, latent_dim, activation=activation, param=leakiness,
+    # Discriminator Training   #TODO - do we need to feed through the ng and ecal and loss weights here???
+    disc_fake_d = discriminator(tf.stop_gradient(gen_sample_noisy), alpha, phase, num_phases,
+                                base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                                 size=network_size, conditioning=conditioning)
-    disc_real, real_ecal, real_ang = discriminator(real_image_input, alpha, phase, num_phases, base_shape,
-                              base_dim, latent_dim, activation=activation, param=leakiness,
+    disc_real = discriminator(real_image_input, alpha, phase, num_phases,
+                              base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                               is_reuse=True, size=network_size, conditioning=conditioning)
 
     gamma = tf.random_uniform(shape=[tf.shape(real_image_input)[0], 1, 1, 1, 1], minval=0., maxval=1.)
-    interpolates = gamma * real_image_input + (1 - gamma) * tf.stop_gradient(gen_sample)
+    interpolates = gamma * real_image_input + (1 - gamma) * tf.stop_gradient(gen_sample_noisy)
 
-
-    disc_fake_d3, fake_ecal3, fake_ang3 = discriminator(interpolates, alpha, phase,
+    gradients = tf.gradients(discriminator(interpolates, alpha, phase,
                                            num_phases, base_shape, base_dim, latent_dim,
                                            is_reuse=True, activation=activation,
-                                           param=leakiness, size=network_size, conditioning=conditioning) # ToDO Renaming
-    gradients = tf.gradients(disc_fake_d3, [interpolates])[0]
+                                           param=leakiness, size=network_size, conditioning=conditioning), [interpolates])[0]
     slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=(1, 2, 3)))
 
-    # Generator training.
+     # Generator training. #anglegan#emmac#ach
     disc_fake_g, fake_ecal_g, fake_ang_g = discriminator(gen_sample, alpha, phase, num_phases, base_shape, base_dim, latent_dim,
                                 activation=activation, param=leakiness, size=network_size, is_reuse=True, conditioning=conditioning)
 
-    #print(f"ANGLEPGAN DEBUG ### : disc_fake_d={disc_fake_d}, disc_fake_d.shape={disc_fake_d.shape}")
-    #print(f"ANGLEPGAN DEBUG ### : gradients={gradients}, gradients.shape={gradients.shape}")
-    #print(f"ANGLEPGAN DEBUG ### : slopes={slopes}, slopes.shape={slopes.shape}")
-
-    # wasserstein gan
     if loss_fn == 'wgan':
-        # has the real/fake activation layer built in, as a critic that rates. Allows you to move far away and still get a good gradient
         gradient_penalty = (slopes - 1) ** 2
         gp_loss = gp_weight * gradient_penalty
         disc_loss = disc_fake_d - disc_real
@@ -225,12 +236,14 @@ def forward_simultaneous(generator,
     elif loss_fn == 'logistic':
         gradient_penalty = tf.reduce_mean(slopes ** 2)
         gp_loss = gp_weight * gradient_penalty
-        disc_loss = tf.reduce_mean(tf.nn.softplus(disc_fake_d)) + tf.reduce_mean(tf.nn.softplus(-disc_real))
-        print(f"ANGLEPGAN DEBUG ### : disc_loss={disc_loss}")
+        disc_loss = tf.reduce_mean(tf.nn.softplus(disc_fake_d)) + tf.reduce_mean(
+            tf.nn.softplus(-disc_real))
         disc_loss += gp_loss
         gen_loss = tf.reduce_mean(tf.nn.softplus(-disc_fake_g))
-
-    elif loss_fn == 'anglegan':   # NEEDS TO BE TESTED + DEBUGGED!!
+   
+  #################################################anglepgan#ach#emmac START
+     
+   elif loss_fn == 'anglegan':   # NEEDS TO BE TESTED + DEBUGGED!!
         gradient_penalty = tf.reduce_mean(slopes ** 2)
         fake_loss = bce(disc_real, disc_fake_d)     # NOT SURE!! CHECK!
         # need to use ecal_angle() in conditional lambda layer (in d) to find ang_output/ang_target
@@ -277,6 +290,7 @@ def forward_simultaneous(generator,
         print(f"ANGLEPGAN DEBUG ## : ang_loss={ang_loss}")
         print(f"ANGLEPGAN DEBUG ## : ecal_loss={ecal_loss}")
         print(f"ANGLEPGAN DEBUG ## : gen_loss={gen_loss}")
+        #################################################anglepgan#ach#emmac END
 
     else:
         raise ValueError(f"Unknown loss function: {loss_fn}")
