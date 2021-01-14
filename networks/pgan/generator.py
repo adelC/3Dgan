@@ -47,6 +47,7 @@ def generator(x, alpha, phase, num_phases, base_dim, base_shape, activation, par
 
     if conditioning is not None:
         raise NotImplementedError()
+        
     with tf.variable_scope('generator') as scope:
 
         if is_reuse:
