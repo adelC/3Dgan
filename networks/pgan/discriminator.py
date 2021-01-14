@@ -36,11 +36,7 @@ def discriminator_out(x, base_dim, latent_dim, filters_out, activation, param):
             x = dense(x, 1, activation='linear')
             x = apply_bias(x)
 
-        # lambda layers (physics functions) used for calculating discriminator loss
-        #ecal = ecal_sum(x, base_dim)
-        #ang = ecal_angle(x, base_dim)
-
-        return x#, ecal, ang
+        return x
 
 
 def discriminator(x, alpha, phase, num_phases, base_shape, base_dim, latent_dim, activation, param=None, is_reuse=False, size='medium', conditioning=None):
