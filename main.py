@@ -19,8 +19,12 @@ from networks.ops import num_filters
 from tensorflow.data.experimental import AUTOTUNE
 #import nvgpu
 import logging
+
 # For TensorBoard Debugger:
 from tensorflow.python import debug as tf_debug
+
+from optuna_objective import optuna_objective   #caspar #surfgan addition to refactor
+
 
 def main(args, config):
 
@@ -928,6 +932,8 @@ if __name__ == '__main__':
     parser.add_argument('--starting_phase', type=int, default=None, required=True)
     parser.add_argument('--ending_phase', type=int, default=None, required=True)
     parser.add_argument('--latent_dim', type=int, default=None, required=True)
+    #caspar #surfgan addition of first_conv_nfilters
+    parser.add_argument('--first_conv_nfilters', type=int, default=None, required=True, help='Number of filters in the first convolutional layer. Since it is densely connected to the latent space, the number of connections can increase rapidly, hence it can be set separately from the other filter counts deeper in the network')
     parser.add_argument('--network_size', default=None, choices=['xxs', 'xs', 's', 'm', 'l', 'xl', 'xxl'], required=True)
     parser.add_argument('--scratch_path', type=str, default=None, required=True)
     parser.add_argument('--base_batch_size', type=int, default=256, help='batch size used in phase 1')
@@ -952,6 +958,8 @@ if __name__ == '__main__':
     parser.add_argument('--leakiness', type=float, default=0.2)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--horovod', default=True, action='store_true')
+    #caspar #surfgan addition of optuna_distributed
+    parser.add_argument('--optuna_distributed', default=False, action='store_true', help="Pass this argument if you want to run optuna in distributed fashion. Run should be started as an mpi program (i.e. launching with mpirun or srun). Each MPI rank will work on its own Optuna trial. Do NOT combine with --horovod: parallelization happens at the trial level, it should NOT also be done within trials.")
     parser.add_argument('--calc_metrics', default=False, action='store_true')
     parser.add_argument('--g_annealing', default=1,
                         type=float, help='generator annealing rate, 1 -> no annealing.')
@@ -974,8 +982,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_labels', default=None, type=int)
     parser.add_argument('--g_clipping', default=False, type=bool)
     parser.add_argument('--d_clipping', default=False, type=bool)
+    #caspar #surfgan summary_large_every_nsteps changed from 1000 in #anglepgan to 64 in #caspar #surfgan                 
     parser.add_argument('--summary_small_every_nsteps', default=32, type=int, help="Summaries are saved every time the locally processsed image counter is a multiple of this number")
-    parser.add_argument('--summary_large_every_nsteps', default=1000, type=int, help="Large summaries such as images are saved every time the locally processed image counter is a multiple of this number")
+    parser.add_argument('--summary_large_every_nsteps', default=64, type=int, help="Large summaries such as images are saved every time the locally processed image counter is a multiple of this number")
     # parser.add_argument('--load_phase', default=None, type=int)
     parser.add_argument('--checkpoint_every_nsteps', default=20000, type=int, help="Checkpoint files are saved every time the globally processed image counter is (approximately) a multiple of this number. Technically, the counter needs to satisfy: counter % checkpoint_every_nsteps < global_batch_size.")
     parser.add_argument('--logdir', default=None, type=str, help="Allows one to specify the log directory. The default is to store logs and checkpoints in the <repository_root>/runs/<network_architecture>/<datetime_stamp>. You may want to override from the batch script so you can store additional logs in the same directory, e.g. the SLURM output file, job script, etc")
