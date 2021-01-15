@@ -28,6 +28,7 @@ from optuna_objective import optuna_objective   #caspar #surfgan addition to ref
 
 def main(args, config):
 
+    ########################################################anglepgan #ach START #TODO clean out and match/move with optuna_objective
     if args.horovod:
         verbose = hvd.rank() == 0
         global_size = hvd.size()
@@ -90,837 +91,74 @@ def main(args, config):
 
     var_list = list()
     global_step = 0
+########################################################anglepgan #ach END
 
-    # anglepgan
-    en_path = os.path.join(args.dataset_path, f'en/')
-    ang_path = os.path.join(args.dataset_path, 'ang/')
-    ecal_path = os.path.join(args.dataset_path, 'ecal/')
-    for phase in range(1, num_phases + 1):
+    
+########################################################caspar #surfgan START #TODO make them fit
 
-        tf.reset_default_graph()
+    verbose = get_verbosity(args.horovod, args.optuna_distributed)
 
-        # ------------------------------------------------------------------------------------------#
-        # DATASET
+    timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+    study_name = f"optuna_{timestamp}"
 
-        size = start_resolution * (2 ** (phase - 1))
-
-        data_path = os.path.join(args.dataset_path, f'{size}x{size}/')
-
-        npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
-        # anglepgan
-        npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
-
-        npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
-
-
-        npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
-
+    storage_sqlite=f'sqlite:///optuna_{timestamp}.db'
+    if args.logdir is not None:
+        storage_sqlite=f'sqlite:///{args.logdir}/optuna.db'
+    
+    # Do we want to run optuna trials? Or run a convergence training based on a previous trial result?
+    if args.optuna_use_best_trial:
+        study_name = optuna.study.get_all_study_summaries(args.optuna_use_best_trial)[0].study_name
         if verbose:
-            print(f'Phase {phase}: reading data from dir {data_path}')
-        npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+            print("Restoring best trial:")
+            print(f"    Study name: {study_name}")
+            print(f"    Database: {args.optuna_use_best_trial}")
+        study = optuna.load_study(study_name = study_name, storage = args.optuna_use_best_trial)
 
-        # # dataset = tf.data.Dataset.from_generator(npy_data.__iter__, npy_data.dtype, npy_data.shape)
-        # dataset = tf.data.Dataset.from_tensor_slices(npy_data.scratch_files)
-
-        # Get DataLoader
-        batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
-
-        if phase >= args.starting_phase:
-            print("###assert debut :", batch_size, global_size, args.max_global_batch_size)
-            assert batch_size * global_size <= args.max_global_batch_size
-            if verbose:
-                print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
-
-        # if args.horovod:
-        #     dataset.shard(hvd.size(), hvd.rank())
-        #
-        # def load(x):
-        #     x = np.load(x.decode())[np.newaxis, ...].astype(np.float32) / 1024 - 1
-        #     return x
-        #
-        # if args.gpu:
-        #     parallel_calls = AUTOTUNE
-        # else:
-        #     parallel_calls = int(os.environ['OMP_NUM_THREADS'])
-        #
-        # dataset = dataset.shuffle(len(npy_data))
-        # dataset = dataset.map(lambda x: tuple(tf.py_func(load, [x], [tf.float32])), num_parallel_calls=parallel_calls)
-        # dataset = dataset.batch(batch_size, drop_remainder=True)
-        # dataset = dataset.repeat()
-        # dataset = dataset.prefetch(AUTOTUNE)
-        # dataset = dataset.make_one_shot_iterator()
-        # data = dataset.get_next()
-        # if len(data) == 1:
-        #     real_image_input = data
-        #     real_label = None
-        # elif len(data) == 2:
-        #     real_image_input, real_label = data
-        # else:
-        #     raise NotImplementedError()
-
-#zdim_base = max(1, final_shape[1] // (2 ** num_phases))
-        current_shape = [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in
-                                                       base_shape[1:]]]
+        # Start a full training with the best_trial parameters that were obtained previously:
         if verbose:
-            print(f'base_shape: {base_shape}, current_shape: {current_shape}')
-        real_image_input = tf.placeholder(shape=current_shape, dtype=tf.float32)
+            print("Running a single training with the following fixed trial parameters:")
+            print(study.best_trial)
+        optuna_objective(study.best_trial, args, config)
+    
+    # Else, run the optimization trials
+    else:
+        # If you want to run optuna in distributed fashion, through an mpirun...
+        if args.optuna_distributed:
+            # Only worker with rank 0 should create a study:
+            study = None
+            if hvd.rank() == 0:
+                print("Storing SQlite database for optuna at %s" %storage_sqlite)
+                study = optuna.create_study(direction = "minimize", study_name = study_name, storage = storage_sqlite)
+        
+            # Call a barrier to make sure the study has been created before the other workers load it
+            MPI.COMM_WORLD.Barrier()
 
-        # real_image_input = tf.random.normal([1, batch_size, image_channels, *[size * 2 ** (phase -
-        #                                                                                  1) for size in base_shape[1:]]])
-        # real_image_input = tf.squeeze(real_image_input, axis=0)
-        # real_image_input = tf.ensure_shape(real_image_input, [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in base_shape[1:]]])
+            # Then, make all other workers load the study
+            if hvd.rank() != 0:
+                study = optuna.load_study(study_name = study_name, storage = storage_sqlite)
 
-        #anglepgan -- commenting the normalization
-        #real_image_input = real_image_input + tf.random.normal(tf.shape(real_image_input)) * .01
-
-        # anglepgan
-        e_p_shape = [batch_size, 1]
-        ang_shape = [batch_size, 1]
-        e_p = tf.placeholder(shape=e_p_shape, dtype=tf.float32)
-        ang = tf.placeholder(shape=ang_shape, dtype=tf.float32)
-
-        real_label = None
-
-        if real_label is not None:
-            real_label = tf.one_hot(real_label, depth=args.num_labels)
-
-        # ------------------------------------------------------------------------------------------#
-        # OPTIMIZERS
-
-        g_lr = args.g_lr
-        d_lr = args.d_lr
-
-        if args.horovod:
-            if args.g_scaling == 'sqrt':
-                g_lr = g_lr * np.sqrt(hvd.size())
-            elif args.g_scaling == 'linear':
-                g_lr = g_lr * hvd.size()
-            elif args.g_scaling == 'none':
-                pass
-            else:
-                raise ValueError(args.g_scaling)
-
-            if args.d_scaling == 'sqrt':
-                d_lr = d_lr * np.sqrt(hvd.size())
-            elif args.d_scaling == 'linear':
-                d_lr = d_lr * hvd.size()
-            elif args.d_scaling == 'none':
-                pass
-            else:
-                raise ValueError(args.d_scaling)
-
-        d_lr = tf.Variable(d_lr, name='d_lr', dtype=tf.float32)
-        g_lr = tf.Variable(g_lr, name='g_lr', dtype=tf.float32)
-
-        optimizer_gen = tf.train.AdamOptimizer(learning_rate=g_lr, beta1=args.beta1, beta2=args.beta2)
-        optimizer_disc = tf.train.AdamOptimizer(learning_rate=d_lr, beta1=args.beta1, beta2=args.beta2)
-        #optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=g_lr)
-        #optimizer_disc = tf.train.RMSPropOptimizer(learning_rate=d_lr)
-        # optimizer_gen = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
-        # optimizer_disc = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
-        # optimizer_gen = RAdamOptimizer(learning_rate=g_lr, beta1=args.beta1, beta2=args.beta2)
-        # optimizer_disc = RAdamOptimizer(learning_rate=d_lr, beta1=args.beta1, beta2=args.beta2)
-
-        intra_phase_step = tf.Variable(0, name='step', dtype=tf.int32)
-        update_intra_phase_step = intra_phase_step.assign_add(batch_size*global_size)
-
-        # Turn arguments into constant Tensors
-        g_lr_max = tf.constant(args.g_lr, tf.float32)
-        d_lr_max = tf.constant(args.g_lr, tf.float32)
-        g_lr_rise_niter = tf.constant(args.g_lr_rise_niter)
-        d_lr_rise_niter = tf.constant(args.d_lr_rise_niter)
-        g_lr_decay_niter = tf.constant(args.g_lr_decay_niter)
-        d_lr_decay_niter = tf.constant(args.d_lr_decay_niter)
-        steps_per_phase = tf.constant(args.mixing_nimg + args.stabilizing_nimg)
-
-#        with tf.control_dependencies([update_intra_phase_step]):
-#            update_g_lr = g_lr.assign(g_lr * args.g_annealing)
-#            update_d_lr = d_lr.assign(d_lr * args.d_annealing)
-        update_g_lr = lr_update(lr = g_lr, intra_phase_step = intra_phase_step,
-                                     steps_per_phase = steps_per_phase, lr_max = g_lr_max,
-                                     lr_increase = args.g_lr_increase, lr_decrease = args.g_lr_decrease,
-                                     lr_rise_niter = args.g_lr_rise_niter, lr_decay_niter = args.g_lr_decay_niter
-                                    )
-        update_d_lr = lr_update(lr = d_lr, intra_phase_step = intra_phase_step,
-                                     steps_per_phase = steps_per_phase, lr_max = d_lr_max,
-                                     lr_increase = args.d_lr_increase, lr_decrease = args.d_lr_decrease,
-                                     lr_rise_niter = args.d_lr_rise_niter, lr_decay_niter = args.d_lr_decay_niter
-                                    )
-
-        if args.horovod:
-            if args.use_adasum:
-                # optimizer_gen = hvd.DistributedOptimizer(optimizer_gen, op=hvd.Adasum)
-                optimizer_gen = hvd.DistributedOptimizer(optimizer_gen)
-                optimizer_disc = hvd.DistributedOptimizer(optimizer_disc, op=hvd.Adasum)
-            else:
-                optimizer_gen = hvd.DistributedOptimizer(optimizer_gen)
-                optimizer_disc = hvd.DistributedOptimizer(optimizer_disc)
-
-        # ------------------------------------------------------------------------------------------#
-        # NETWORKS
-
-        with tf.variable_scope('alpha'):
-            alpha = tf.Variable(1, name='alpha', dtype=tf.float32)
-            # Alpha init
-            init_alpha = alpha.assign(1)
-
-            # Specify alpha update op for mixing phase.
-            num_steps = args.mixing_nimg // (batch_size * global_size)
-            # This original code produces too large steps when performing a run that is restarted in the middle of the alpha mixing phase:
-            # alpha_update = 1 / num_steps
-            # This code produces a correct step size when restarting (the same step size that would be used if a run wasn't restarted)
-            alpha_update = args.starting_alpha / num_steps
-            # noinspection PyTypeChecker
-            update_alpha = alpha.assign(tf.maximum(alpha - alpha_update, 0))
-
-        if args.optim_strategy == 'simultaneous':
-            gen_loss, disc_loss, gp_loss, gen_sample = forward_simultaneous(
-                generator,
-                discriminator,
-                real_image_input,
-                args.latent_dim,
-                alpha,
-                phase,
-                num_phases,
-                base_dim,
-                base_shape,
-                args.activation,
-                args.leakiness,
-                args.network_size,
-                args.loss_fn,
-                args.loss_weights,
-                args.gp_weight,
-                e_p,
-                ang
-            )
-            gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-            disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-
-            g_gradients, g_variables = zip(*optimizer_gen.compute_gradients(gen_loss,
-                                                                            var_list=gen_vars))
-            if args.g_clipping:
-                g_gradients, _ = tf.clip_by_global_norm(g_gradients, 1.0)
-
-
-            d_gradients, d_variables = zip(*optimizer_disc.compute_gradients(disc_loss,
-                                                                             var_list=disc_vars))
-            if args.d_clipping:
-                d_gradients, _ = tf.clip_by_global_norm(d_gradients, 1.0)
-
-
-            g_norms = tf.stack([tf.norm(grad) for grad in g_gradients if grad is not None])
-            max_g_norm = tf.reduce_max(g_norms)
-            d_norms = tf.stack([tf.norm(grad) for grad in d_gradients if grad is not None])
-            max_d_norm = tf.reduce_max(d_norms)
-
-            # g_norms = tf.stack([tf.norm(grad) for grad, var in g_gradients if grad is not None])
-            # max_g_norm = tf.reduce_max(g_norms)
-            # d_norms = tf.stack([tf.norm(grad) for grad, var in d_gradients if grad is not None])
-            # max_d_norm = tf.reduce_max(d_norms)
-
-            # g_clipped_grads = [(tf.clip_by_norm(grad, clip_norm=128), var) for grad, var in g_gradients]
-            # train_gen = optimizer_gen.apply_gradients(g_clipped_grads)
-            train_gen = optimizer_gen.apply_gradients(zip(g_gradients, g_variables))
-            train_disc = optimizer_disc.apply_gradients(zip(d_gradients, d_variables))
-
-            # train_gen = optimizer_gen.apply_gradients(g_gradients)
-            # train_disc = optimizer_disc.apply_gradients(d_gradients)
-
-        elif args.optim_strategy == 'alternate':
-
-            disc_loss, gp_loss = forward_discriminator(
-                generator,
-                discriminator,
-                real_image_input,
-                args.latent_dim,
-                alpha,
-                phase,
-                num_phases,
-                args.base_dim,
-                base_shape,
-                args.activation,
-                args.leakiness,
-                args.network_size,
-                args.loss_fn,
-                args.loss_weights,
-                args.gp_weight,
-                e_p,
-                ang
-                # conditioning=real_label
-            )
-
-            disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-            d_gradients = optimizer_disc.compute_gradients(disc_loss, var_list=disc_vars)
-            d_norms = tf.stack([tf.norm(grad) for grad, var in d_gradients if grad is not None])
-            max_d_norm = tf.reduce_max(d_norms)
-
-            train_disc = optimizer_disc.apply_gradients(d_gradients)
-
-            with tf.control_dependencies([train_disc]):
-                gen_sample, gen_loss = forward_generator(
-                    generator,
-                    discriminator,
-                    real_image_input,
-                    args.latent_dim,
-                    alpha,
-                    phase,
-                    num_phases,
-                    base_dim,
-                    base_shape,
-                    args.activation,
-                    args.leakiness,
-                    args.network_size,
-                    args.loss_fn,
-                    args.loss_weights,
-                    e_p,
-                    ang,
-                    is_reuse=True
-                )
-
-                gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-                g_gradients = optimizer_gen.compute_gradients(gen_loss, var_list=gen_vars)
-                g_norms = tf.stack([tf.norm(grad) for grad, var in g_gradients if grad is not None])
-                max_g_norm = tf.reduce_max(g_norms)
-                train_gen = optimizer_gen.apply_gradients(g_gradients)
-
+            ntrials = np.ceil(args.optuna_ntrials/hvd.size())
         else:
-            raise ValueError("Unknown optim strategy ", args.optim_strategy)
-
-        if verbose:
-            print(f"Generator parameters: {count_parameters('generator')}")
-            print(f"Discriminator parameters:: {count_parameters('discriminator')}")
-
-        # train_gen = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
-        # train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
-
-        ema = tf.train.ExponentialMovingAverage(decay=args.ema_beta)
-        ema_op = ema.apply(gen_vars)
-        # Transfer EMA values to original variables
-        ema_update_weights = tf.group(
-            [tf.assign(var, ema.average(var)) for var in gen_vars])
-
-        with tf.name_scope('summaries'):
-            # We want to store large / heavy summaries like images less frequently
-            summary_small = []
-            summary_large = []
-            # Summarie
-            print("DEBUG ### ", disc_loss.shape)
-            summary_small.append(tf.summary.scalar('d_loss', disc_loss))
-            summary_small.append(tf.summary.scalar('g_loss', gen_loss))
-            summary_small.append(tf.summary.scalar('gp', tf.reduce_mean(gp_loss)))
-
-            for g in zip(g_gradients, g_variables):
-                summary_small.append(tf.summary.histogram(f'grad_{g[1].name}', g[0]))
-
-            for g in zip(d_gradients, d_variables):
-                summary_small.append(tf.summary.histogram(f'grad_{g[1].name}', g[0]))
-
-            # tf.summary.scalar('convergence', tf.reduce_mean(disc_real) - tf.reduce_mean(tf.reduce_mean(disc_fake_d)))
-
-            summary_small.append(tf.summary.scalar('max_g_grad_norm', max_g_norm))
-            summary_small.append(tf.summary.scalar('max_d_grad_norm', max_d_norm))
-
-            # Spread out 3D image as 2D grid, slicing in the z-dimension
-            real_image_grid = tf.transpose(real_image_input[0], (1, 2, 3, 0))
-            shape = real_image_grid.get_shape().as_list()
-            print(f'real_image_grid shape: {shape}')
-            grid_cols = int(2 ** np.floor(np.log(np.sqrt(shape[0])) / np.log(2)))
-            # If the image z-dimension isn't divisible by grid_rows, we need to pad
-            if (shape[0] % grid_cols) != 0:
-                # Initialize pad_list for numpy padding
-                pad_list = [[0,0] for i in range(0, len(shape))]
-                # Compute number of slices we need to add to get to the next multiple of shape[0]
-                pad_nslices = grid_cols - (shape[0] % grid_cols)
-                pad_list[0] = [0, pad_nslices]
-                real_image_grid = tf.pad(real_image_grid, tf.constant(pad_list), "CONSTANT", constant_values=0)
-                # Recompute shape, so that the number of grid_rows is adapted to that
-                shape = real_image_grid.get_shape().as_list()
-            grid_rows = int(np.ceil(shape[0] / grid_cols))
-            grid_shape = [grid_rows, grid_cols]
-            real_image_grid = image_grid(real_image_grid, grid_shape, image_shape=shape[1:3],
-                                         num_channels=shape[-1])
-
-            fake_image_grid = tf.transpose(gen_sample[0], (1, 2, 3, 0))
-            # Use the same padding for the fake_image_grid
-            if (fake_image_grid.get_shape().as_list()[0] % grid_cols) != 0:
-                fake_image_grid = tf.pad(fake_image_grid, tf.constant(pad_list), "CONSTANT", constant_values=0)
-            fake_image_grid = image_grid(fake_image_grid, grid_shape, image_shape=shape[1:3],
-                                         num_channels=shape[-1])
-
-            #fake_image_grid = tf.clip_by_value(fake_image_grid, -1, 2)
-
-            summary_large.append(tf.summary.image('real_image', real_image_grid))
-            summary_large.append(tf.summary.image('fake_image', fake_image_grid))
-
-            summary_small.append(tf.summary.scalar('fake_image_min', tf.math.reduce_min(gen_sample)))
-            summary_small.append(tf.summary.scalar('fake_image_max', tf.math.reduce_max(gen_sample)))
-
-            summary_small.append(tf.summary.scalar('real_image_min', tf.math.reduce_min(real_image_input[0])))
-            summary_small.append(tf.summary.scalar('real_image_max', tf.math.reduce_max(real_image_input[0])))
-            summary_small.append(tf.summary.scalar('alpha', alpha))
-
-            summary_small.append(tf.summary.scalar('g_lr', g_lr))
-            summary_small.append(tf.summary.scalar('d_lr', d_lr))
-
-            # merged_summaries = tf.summary.merge_all()
-            summary_small = tf.summary.merge(summary_small)
-            summary_large = tf.summary.merge(summary_large)
-
-        # Other ops
-        init_op = tf.global_variables_initializer()
-        assign_starting_alpha = alpha.assign(args.starting_alpha)
-        assign_zero = alpha.assign(0)
-        broadcast = hvd.broadcast_global_variables(0)
-        #print("Global variables:")
-        #print("%s" % tf.compat.v1.global_variables())
-
-        with tf.Session(config=config) as sess:
-            # if args.gpu:
-            #     assert tf.test.is_gpu_available(cuda_only=False, min_cuda_compute_capability=None)
-            # sess.graph.finalize()
-            sess.run(init_op)
-
-            trainable_variable_names = [v.name for v in tf.trainable_variables()]
-
-            if var_list is not None and phase > args.starting_phase:
-                print("Restoring variables from:", os.path.join(logdir, f'model_{phase - 1}'))
-                var_names = [v.name for v in var_list]
-                load_vars = [sess.graph.get_tensor_by_name(n) for n in var_names if n in trainable_variable_names]
-                saver = tf.train.Saver(load_vars)
-                saver.restore(sess, os.path.join(logdir, f'model_{phase - 1}'))
-                print("Variables restored!")
-            elif var_list is not None and args.continue_path and phase == args.starting_phase:
-                print("Restoring variables from:", args.continue_path)
-                var_names = [v.name for v in var_list]
-                load_vars = [sess.graph.get_tensor_by_name(n) for n in var_names if n in trainable_variable_names]
-                saver = tf.train.Saver(load_vars)
-                saver.restore(sess, os.path.join(args.continue_path))
-                print("Variables restored!")
-            else:
-                if verbose:
-                     print("Not restoring variables.")
-                     print("Variable List Length:", len(var_list))
-                     writer.add_graph(sess.graph)
-
-            var_list = gen_vars + disc_vars
-
-            if phase < args.starting_phase:
-                continue
-
-            if phase == args.starting_phase:
-                sess.run(assign_starting_alpha)
-            else:
-                sess.run(init_alpha)
-
-            if verbose:
-                print(f"Begin mixing epochs in phase {phase}")
-            if args.horovod:
-                if verbose:
-                    print("Broadcasting initial global variables...")
-                sess.run(broadcast)
-                if verbose:
-                    print("Broadcast completed")
-
-            local_step = 0
-            # take_first_snapshot = True
-
-            while True:
-                start = time.time()
-
-
-                # Update learning rate
-                d_lr_val = sess.run(update_d_lr)
-                g_lr_val = sess.run(update_g_lr)
-
-                if global_step % args.checkpoint_every_nsteps < (batch_size*global_size) and local_step > 0:
-                    if args.horovod:
-                        if verbose:
-                            print("Broadcasting global variables for checkpointing...")
-                        sess.run(broadcast)
-                        if verbose:
-                            print("Broadcast completed")
-                    saver = tf.train.Saver(var_list)
-                    if verbose:
-                        print(f'Writing checkpoint file: model_{phase}_ckpt_{global_step}')
-                        saver.save(sess, os.path.join(logdir, f'model_{phase}_ckpt_{global_step}'))
-
-                #print("Batching...")
-                batch_loc = np.random.randint(0, len(npy_data) - batch_size)
-                batch_paths = npy_data[batch_loc: batch_loc + batch_size]
-                batch = np.stack([np.load(path) for path in batch_paths])
-                batch = batch[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-                print("Got a batch!")
-
-                # anglepgan begin
-                batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
-                batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
-                batch_en = np.stack([np.load(path) for path in batch_paths_en])
-                batch_en = batch_en[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                batch_loc_ang = np.random.randint(0, len(npy_ang) - batch_size)
-                batch_paths_ang = npy_ang[batch_loc_ang: batch_loc_ang + batch_size]
-                batch_ang = np.stack([np.load(path) for path in batch_paths_ang])
-                batch_ang = batch_ang[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                batch_loc_ecal = np.random.randint(0, len(npy_ecal) - batch_size)
-                batch_paths_ecal = npy_ecal[batch_loc_ecal: batch_loc_ecal + batch_size]
-                batch_ecal = np.stack([np.load(path) for path in batch_paths_ecal])
-                batch_ecal = batch_ecal[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                # anglepgan end
-
-                #sess = tf_debug.LocalCLIDebugWrapperSession(sess, ui_type="readline")
-                #sess = tf_debug.TensorBoardDebugWrapperSession(sess, 'localhost:6789')
-                small_summary_bool = (local_step % args.summary_small_every_nsteps == 0)
-                large_summary_bool = (local_step % args.summary_large_every_nsteps == 0)
-                if small_summary_bool:
-                    _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, summary_small, summary_large,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-                elif large_summary_bool:
-                    _, _, summary_s, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, summary_small,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-                else:
-                    _, _, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, disc_loss, gen_loss],
-                         feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-                #print("Completed step")
-                global_step += batch_size * global_size
-                local_step += 1
-
-                end = time.time()
-                local_img_s = batch_size / (end - start)
-                img_s = global_size * local_img_s
-
-                sess.run(update_alpha)
-                sess.run(ema_op)
-                in_phase_step = sess.run(update_intra_phase_step)
-
-                if verbose:
-
-                    if large_summary_bool:
-                        print('Writing large summary...')
-                        writer.add_summary(summary_s, global_step)
-                        writer.add_summary(summary_l, global_step)
-                    elif small_summary_bool:
-                        print('Writing small summary...')
-                        writer.add_summary(summary_s, global_step)
-                        writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]),
-                                           global_step)
-                    # memory_percentage = psutil.Process(os.getpid()).memory_percent()
-                    # if not args.gpu:
-                    #     memory_percentage = psutil.Process(os.getpid()).memory_percent()
-                    # else:
-                    #     memory_percentage = nvgpu.gpu_info()[local_rank]['mem_used_percent']
-
-
-                    # writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='memory_percentage', simple_value=memory_percentage)]),
-                    #                    global_step)
-                    current_time = time.strftime("%Y-%m-%d_%H:%M:%S", time.gmtime())
-                    print(f"{current_time} \t"
-                          f"Step {global_step:09} \t"
-                          f"Step(phase) {in_phase_step:09} \t"
-                          f"img/s {img_s:.2f} \t "
-                          f"img/s/worker {local_img_s:.3f} \t"
-                          f"d_loss {d_loss:.4f} \t "
-                          f"g_loss {g_loss:.4f} \t "
-                          f"d_lr {d_lr_val:.5f} \t"
-                          f"g_lr {g_lr_val:.5f} \t"
-                          # f"memory {memory_percentage:.4f} % \t"
-                          f"alpha {alpha.eval():.2f}")
-
-                #     # if take_first_snapshot:
-                #     #     import tracemalloc
-                #     #     tracemalloc.start()
-                #     #     snapshot_first = tracemalloc.take_snapshot()
-                #     #     take_first_snapshot = False
-
-                #     # snapshot = tracemalloc.take_snapshot()
-                #     # top_stats = snapshot.compare_to(snapshot_first, 'lineno')
-                #     # print("[ Top 10 differences ]")
-                #     # for stat in top_stats[:10]:
-                #     #     print(stat)
-                #     # snapshot_prev = snapshot
-
-
-                if global_step >= ((phase - args.starting_phase)
-                                   * (args.mixing_nimg + args.stabilizing_nimg)
-                                   + args.mixing_nimg):
-                    break
-
-                assert alpha.eval() >= 0
-
-                # if verbose:
-                #     writer.flush()
-
-            if verbose:
-                print(f"Begin stabilizing epochs in phase {phase}")
-
-            sess.run(assign_zero)
-
-            while True:
-                start = time.time()
-
-                # Update learning rate
-                d_lr_val = sess.run(update_d_lr)
-                g_lr_val = sess.run(update_g_lr)
-
-                assert alpha.eval() == 0
-                if global_step % args.checkpoint_every_nsteps == 0 < (batch_size*global_size) and local_step > 0:
-
-                    if args.horovod:
-                        sess.run(broadcast)
-                    saver = tf.train.Saver(var_list)
-                    if verbose:
-                        print(f'Writing checkpoint file: model_{phase}_ckpt_{global_step}')
-                        saver.save(sess, os.path.join(logdir, f'model_{phase}_ckpt_{global_step}'))
-
-                batch_loc = np.random.randint(0, len(npy_data) - batch_size)
-                batch_paths = npy_data[batch_loc: batch_loc + batch_size]
-                batch = np.stack([np.load(path) for path in batch_paths])
-                batch = batch[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                # anglepgan begin
-                batch_loc_ang = np.random.randint(0, len(npy_ang) - batch_size)
-                batch_paths_ang = npy_ang[batch_loc_ang: batch_loc_ang + batch_size]
-                batch_ang = np.stack([np.load(path) for path in batch_paths_ang])
-                batch_ang = batch_ang[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                batch_loc_ecal = np.random.randint(0, len(npy_ecal) - batch_size)
-                batch_paths_ecal = npy_ecal[batch_loc_ecal: batch_loc_ecal + batch_size]
-                batch_ecal = np.stack([np.load(path) for path in batch_paths_ecal])
-                batch_ecal = batch_ecal[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
-
-                # anglepgan end
-
-                small_summary_bool = (local_step % args.summary_small_every_nsteps == 0)
-                large_summary_bool = (local_step % args.summary_large_every_nsteps == 0)
-                if large_summary_bool:
-                    _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, summary_small, summary_large,
-                        disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-                elif small_summary_bool:
-                    _, _, summary_s, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, summary_small,
-                        disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-                else:
-                    _, _, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, disc_loss, gen_loss],
-                        feed_dict={real_image_input: batch, e_p: batch_en, ang: batch_ang})
-
-#                _, _, d_loss, g_loss = sess.run(
-#                        [train_gen, train_disc, disc_loss, gen_loss],
-#                        feed_dict={real_image_input: batch})
-
-                global_step += batch_size * global_size
-                local_step += 1
-
-                end = time.time()
-                local_img_s = batch_size / (end - start)
-                img_s = global_size * local_img_s
-                print("#### DEBUG - IMG_S : ", img_s)
-                sess.run(ema_op)
-                in_phase_step = sess.run(update_intra_phase_step)
-
-                if verbose:
-
-                    if large_summary_bool:
-                        print('Writing large summary...')
-                        writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]), global_step)
-                        writer.add_summary(summary_s, global_step)
-                        writer.add_summary(summary_l, global_step)
-                    elif small_summary_bool:
-                        print('Writing small summary...')
-                        writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s',
-                                                                            simple_value   =img_s)]),
-                                        global_step)
-                        writer.add_summary(summary_s, global_step)
-                    # memory_percentage = psutil.Process(os.getpid()).memory_percent()
-                    # if not args.gpu:
-                    #     memory_percentage = psutil.Process(os.getpid()).memory_percent()
-                    # else:
-                    #     gpu_info = nvgpu.gpu_info()
-                    #     memory_percentage = nvgpu.gpu_info()[local_rank]['mem_used_percent']
-
-                    # writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='memory_percentage', simple_value=memory_percentage)]),
-                    #                    global_step)
-                    current_time = time.strftime("%Y-%m-%d_%H:%M:%S", time.gmtime())
-                    print(f"{current_time} \t"
-                          f"Step {global_step:09} \t"
-                          f"Step(phase) {in_phase_step:09} \t"
-                          f"img/s {img_s:.2f} \t "
-                          f"img/s/worker {local_img_s:.3f} \t"
-                          f"d_loss {d_loss:.4f} \t "
-                          f"g_loss {g_loss:.4f} \t "
-                          f"d_lr {d_lr_val:.5f} \t"
-                          f"g_lr {g_lr_val:.5f} \t"
-                          # f"memory {memory_percentage:.4f} % \t"
-                          f"alpha {alpha.eval():.2f}")
-
-
-                # if verbose:
-                #     writer.flush()
-
-                if global_step >= (phase - args.starting_phase + 1) * (args.stabilizing_nimg + args.mixing_nimg):
-                    # if verbose:
-                    #     run_metadata = tf.RunMetadata()
-                    #     opts = tf.profiler.ProfileOptionBuilder.float_operation()
-                    #     g = tf.get_default_graph()
-                    #     flops = tf.profiler.profile(g, run_meta=run_metadata, cmd='op', options=opts)
-                    #     writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='graph_flops',
-                    #                                                           simple_value=flops.total_float_ops)]),
-                    #                        global_step)
-                    #
-                    #     # Print memory info.
-                    #     try:
-                    #         print(nvgpu.gpu_info())
-                    #     except subprocess.CalledProcessError:
-                    #         pid = os.getpid()
-                    #         py = psutil.Process(pid)
-                    #         print(f"CPU Percent: {py.cpu_percent()}")
-                    #         print(f"Memory info: {py.memory_info()}")
-
-                    break
-
-            # # Calculate metrics.
-            # calc_swds: bool = size >= 16
-            # calc_ssims: bool = min(npy_data.shape[1:]) >= 16
-            #
-            # if args.calc_metrics:
-            #     fids_local = []
-            #     swds_local = []
-            #     psnrs_local = []
-            #     mses_local = []
-            #     nrmses_local = []
-            #     ssims_local = []
-            #
-            #     counter = 0
-            #     while True:
-            #         if args.horovod:
-            #             start_loc = counter + hvd.rank() * batch_size
-            #         else:
-            #             start_loc = 0
-            #         real_batch = np.stack([npy_data[i] for i in range(start_loc, start_loc + batch_size)])
-            #         real_batch = real_batch.astype(np.int16) - 1024
-            #         fake_batch = sess.run(gen_sample).astype(np.float32)
-            #
-            #         # Turn fake batch into HUs and clip to training range.
-            #         fake_batch = (np.clip(fake_batch, -1, 2) * 1024).astype(np.int16)
-            #
-            #         if verbose:
-            #             print('real min, max', real_batch.min(), real_batch.max())
-            #             print('fake min, max', fake_batch.min(), fake_batch.max())
-            #
-            #         fids_local.append(calculate_fid_given_batch_volumes(real_batch, fake_batch, sess))
-            #
-            #         if calc_swds:
-            #             swds = get_swd_for_volumes(real_batch, fake_batch)
-            #             swds_local.append(swds)
-            #
-            #         psnr = get_psnr(real_batch, fake_batch)
-            #         if calc_ssims:
-            #             ssim = get_ssim(real_batch, fake_batch)
-            #             ssims_local.append(ssim)
-            #         mse = get_mean_squared_error(real_batch, fake_batch)
-            #         nrmse = get_normalized_root_mse(real_batch, fake_batch)
-            #
-            #         psnrs_local.append(psnr)
-            #         mses_local.append(mse)
-            #         nrmses_local.append(nrmse)
-            #
-            #         if args.horovod:
-            #             counter = counter + global_size * batch_size
-            #         else:
-            #             counter += batch_size
-            #
-            #         if counter >= args.num_metric_samples:
-            #             break
-            #
-            #     fid_local = np.mean(fids_local)
-            #     psnr_local = np.mean(psnrs_local)
-            #     ssim_local = np.mean(ssims_local)
-            #     mse_local = np.mean(mses_local)
-            #     nrmse_local = np.mean(nrmses_local)
-            #
-            #     if args.horovod:
-            #         fid = MPI.COMM_WORLD.allreduce(fid_local, op=MPI.SUM) / hvd.size()
-            #         psnr = MPI.COMM_WORLD.allreduce(psnr_local, op=MPI.SUM) / hvd.size()
-            #         mse = MPI.COMM_WORLD.allreduce(mse_local, op=MPI.SUM) / hvd.size()
-            #         nrmse = MPI.COMM_WORLD.allreduce(nrmse_local, op=MPI.SUM) / hvd.size()
-            #         if calc_ssims:
-            #             ssim = MPI.COMM_WORLD.allreduce(ssim_local, op=MPI.SUM) / hvd.size()
-            #     else:
-            #         fid = fid_local
-            #         psnr = psnr_local
-            #         ssim = ssim_local
-            #         mse = mse_local
-            #         nrmse = nrmse_local
-            #
-            #     if calc_swds:
-            #         swds_local = np.array(swds_local)
-            #         # Average over batches
-            #         swds_local = swds_local.mean(axis=0)
-            #         if args.horovod:
-            #             swds = MPI.COMM_WORLD.allreduce(swds_local, op=MPI.SUM) / hvd.size()
-            #         else:
-            #             swds = swds_local
-            #
-            #     if verbose:
-            #         print(f"FID: {fid:.4f}")
-            #         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='fid',
-            #                                                               simple_value=fid)]),
-            #                            global_step)
-            #
-            #         print(f"PSNR: {psnr:.4f}")
-            #         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='psnr',
-            #                                                               simple_value=psnr)]),
-            #                            global_step)
-            #
-            #         print(f"MSE: {mse:.4f}")
-            #         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='mse',
-            #                                                               simple_value=mse)]),
-            #                            global_step)
-            #
-            #         print(f"Normalized Root MSE: {nrmse:.4f}")
-            #         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='nrmse',
-            #                                                               simple_value=nrmse)]),
-            #                            global_step)
-            #
-            #         if calc_swds:
-            #             print(f"SWDS: {swds}")
-            #             for i in range(len(swds))[:-1]:
-            #                 lod = 16 * 2 ** i
-            #                 writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag=f'swd_{lod}',
-            #                                                                       simple_value=swds[
-            #                                                                           i])]),
-            #                                    global_step)
-            #             writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag=f'swd_mean',
-            #                                                                   simple_value=swds[
-            #                                                                       -1])]), global_step)
-            #         if calc_ssims:
-            #             print(f"SSIM: {ssim}")
-            #             writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag=f'ssim',
-            #                                                                   simple_value=ssim)]), global_step)
-
-            if verbose:
-                print("\n\n\n End of phase.")
-
-                # Save Session.
-                sess.run(ema_update_weights)
-                saver = tf.train.Saver(var_list)
-                print("Writing final checkpoint file: model_{phase}")
-                saver.save(sess, os.path.join(logdir, f'model_{phase}'))
-
-            if args.ending_phase:
-                if phase == args.ending_phase:
-                    print("Reached final phase, breaking.")
-                    break
+            # No horovod, so don't use SQlite, but just the default storage
+            study = optuna.create_study(direction = "minimize", study_name = study_name)
+            ntrials = args.optuna_ntrials
+
+        # See how much output we can get...
+        optuna.logging.set_verbosity(optuna.logging.DEBUG)
+
+        # Raised errors that should be caught, but trials should just continue (errors are e.g. thrown when OOM)
+        catchErrorsInTrials = (tf.errors.UnknownError, tf.errors.InternalError)
+
+        study.optimize(lambda trial: optuna_objective(trial, args, config), n_trials = ntrials, catch = catchErrorsInTrials)
+
+        print("Number of finished trials: ", len(study.trials))
+        print("Best trial:")
+        trial = study.best_trial
+        print(" Value: ", trial.value)
+        print(" Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+########################################################caspar #surfgan END
 
 
 if __name__ == '__main__':
@@ -982,15 +220,103 @@ if __name__ == '__main__':
     parser.add_argument('--num_labels', default=None, type=int)
     parser.add_argument('--g_clipping', default=False, type=bool)
     parser.add_argument('--d_clipping', default=False, type=bool)
+                  
+    ###############################################caspar #surfgan added params START
     #caspar #surfgan summary_large_every_nsteps changed from 1000 in #anglepgan to 64 in #caspar #surfgan                 
     parser.add_argument('--summary_small_every_nsteps', default=32, type=int, help="Summaries are saved every time the locally processsed image counter is a multiple of this number")
     parser.add_argument('--summary_large_every_nsteps', default=64, type=int, help="Large summaries such as images are saved every time the locally processed image counter is a multiple of this number")
     # parser.add_argument('--load_phase', default=None, type=int)
+    parser.add_argument('--metrics_every_nsteps', default=128, type=int, help="Metrics are computed every time the locally processed image counter is a multiple of this number")
+    # parser.add_argument('--load_phase', default=None, type=int)
+    parser.add_argument('--compute_FID', default=False, action='store_true', help="Whether to compute the Frechet Inception Distance (frequency determined by metrics_every_nsteps)")
+    parser.add_argument('--compute_swds', default=False, action='store_true', help="Whether to compute the Sliced Wasserstein Distance (frequency determined by metrics_every_nsteps)")
+    parser.add_argument('--compute_ssims', default=False, action='store_true', help="Whether to compute the Structural Similarity (frequency determined by metrics_every_nsteps)")
+    parser.add_argument('--compute_psnrs', default=False, action='store_true', help="Whether to compute the peak signal to noise ratio (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
+    parser.add_argument('--compute_mses', default=False, action='store_true', help="Whether to compute the mean squared error (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
+    parser.add_argument('--compute_nrmses', default=False, action='store_true', help="Whether to compute the normalized mean squared error (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
     parser.add_argument('--checkpoint_every_nsteps', default=20000, type=int, help="Checkpoint files are saved every time the globally processed image counter is (approximately) a multiple of this number. Technically, the counter needs to satisfy: counter % checkpoint_every_nsteps < global_batch_size.")
     parser.add_argument('--logdir', default=None, type=str, help="Allows one to specify the log directory. The default is to store logs and checkpoints in the <repository_root>/runs/<network_architecture>/<datetime_stamp>. You may want to override from the batch script so you can store additional logs in the same directory, e.g. the SLURM output file, job script, etc")
+    parser.add_argument('--optuna_ntrials', default=100, type=int, help="Sets the number of Optuna Trials to do")
+    parser.add_argument('--optuna_use_best_trial', default=None, type=str, help="SQlite Optuna database file. This will run the training with the parameters from the best_trial in the first study in that database.")
+    parser.add_argument('--noise_stddev', default=None, type=float, required=True, help="Normally distributed noise is added to the inputs before training. This argument specifies the standard deviation of that normal distribution, and thus the magnitude of that noise. Adding noise that is of the same order as the real noise in your image likely has the best effect.")
+    parser.add_argument('--data_mean', default=None, type=float, required=False, help="Mean of the input data. Used for input normalization. E.g. in the case of CT scans, this would be the mean CT value over all scans. Note: normalization is only performed if both data_mean and data_stddev are defined.")
+    parser.add_argument('--data_stddev', default=None, type=float, required=False, help="Standard deviation of the input data. Used for input normalization. E.g. in the case of CT scans, this would be the standard deviation of CT values over all scans. Note: normalization is only performed if both data_mean and data_stddev are defined.")
+    ###############################################caspar #surfgan added params END
+                  
     args = parser.parse_args()
 
+    if args.horovod or args.optuna_distributed:
+        hvd.init()
+        np.random.seed(args.seed + hvd.rank())
+        tf.random.set_random_seed(args.seed + hvd.rank())
+        random.seed(args.seed + hvd.rank())
+
+        print(f"Rank {hvd.rank()}:{hvd.local_rank()} reporting!")
+
+    else:
+        np.random.seed(args.seed)
+        tf.random.set_random_seed(args.seed)
+        random.seed(args.seed)
+
     if args.horovod:
+        verbose = hvd.rank() == 0
+    else:
+        verbose = True
+
+
+
+    # if args.coninue_path:
+    #     assert args.load_phase is not None, "Please specify in which phase the weights of the " \
+    #                                         "specified continue_path should be loaded."
+
+    # Set default for *_rise_niter and *_decay_niter if needed. We can't do this natively with ArgumentParser because it depends on the value of another argument.
+    if args.g_lr_increase and not args.g_lr_rise_niter:
+        args.g_lr_rise_niter = int(args.mixing_nimg/2)
+        if verbose:
+            print(f"Increasing learning rate requested for the generator, but no number of iterations was specified for the increase (g_lr_rise_niter). Defaulting to {args.g_lr_rise_niter}.")
+    if args.g_lr_decrease and not args.g_lr_decay_niter:
+        args.g_lr_decay_niter = int(args.stabilizing_nimg/2)
+        if verbose:
+            print(f"Decreasing learning rate requested for the generator, but no number of iterations was specified for the increase (g_lr_decay_niter). Defaulting to {args.g_lr_decay_niter}.")
+    if args.d_lr_increase and not args.d_lr_rise_niter:
+        args.d_lr_rise_niter = int(args.mixing_nimg/2)
+        if verbose:
+            print(f"Increasing learning rate requested for the discriminator, but no number of iterations was specified for the increase (d_lr_rise_niter). Defaulting to {args.d_lr_rise_niter}.")
+    if args.d_lr_decrease and not args.d_lr_decay_niter:
+        args.d_lr_decay_niter = int(args.stabilizing_nimg/2)
+        if verbose:
+            print(f"Decreasing learning rate requested for the discriminator, but no number of iterations was specified for the increase (d_lr_decay_niter). Defaulting to {args.d_lr_decay_niter}.")
+
+    if args.architecture in ('stylegan2'):
+        assert args.starting_phase == args.ending_phase
+
+    if 'OMP_NUM_THREADS' not in os.environ:
+        print("Warning: OMP_NUM_THREADS not set. Setting it to 1.")
+        os.environ['OMP_NUM_THREADS'] = str(1)
+
+    gopts = tf.GraphOptions(place_pruned_graph=True)
+    config = tf.ConfigProto(graph_options=gopts, allow_soft_placement=True)
+    # config = tf.ConfigProto()
+
+    if args.gpu:
+        config.gpu_options.allow_growth = True
+        # config.inter_op_parallelism_threads = 1
+        #config.gpu_options.per_process_gpu_memory_fraction = 0.96
+        if args.horovod or args.optuna_distributed:
+            config.gpu_options.visible_device_list = str(hvd.local_rank())
+
+    else:
+        config = tf.ConfigProto(graph_options=gopts,
+                                intra_op_parallelism_threads=int(os.environ['OMP_NUM_THREADS']),
+                                inter_op_parallelism_threads=args.num_inter_ops,
+                                allow_soft_placement=True,
+                                device_count={'CPU': int(os.environ['OMP_NUM_THREADS'])})
+
+
+    main(args, config)
+args = parser.parse_args()
+
+    if args.horovod or args.optuna_distributed: #caspar #surfgan #optuna
         hvd.init()
         np.random.seed(args.seed + hvd.rank())
         tf.random.set_random_seed(args.seed + hvd.rank())
@@ -1045,7 +371,7 @@ if __name__ == '__main__':
         config.gpu_options.allow_growth = True
         # config.inter_op_parallelism_threads = 1
         #config.gpu_options.per_process_gpu_memory_fraction = 0.96
-        if args.horovod:
+        if args.horovod  or args.optuna_distributed:  #caspar #surfgan
             config.gpu_options.visible_device_list = str(hvd.local_rank())
 
     else:
