@@ -115,7 +115,11 @@ def optuna_objective(trial, args, config):
             print(f'Phase {phase}: reading data from dir {data_path}')
         npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
-                                    
+        
+        #caspar #surfgan #TODO choose over line 116?
+        # Get NumpyPathDataset object for current phase. It's an iterable object that returns the path to samples in the dataset
+        #npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
         #CASPAR #TODO: we should probably split the npy_data in a train and validation set. The validation set can then be passed to save_metrics to compute the metrics on.
         # Note: the split below preserves the ordering of npy_data. Thus, similar filenames tend to either end up all in the training or validation set.
         # That may or may not make much sense, depending on whether there is correlation between your samples!
@@ -239,7 +243,10 @@ def optuna_objective(trial, args, config):
             args.leakiness,
             args.network_size,
             args.loss_fn,
+            args.loss_weights,
             args.gp_weight,
+            e_p,  #TODO #anglepgan #ach check placement
+            ang, #TODO #anglepgan #ach check placement
             args.optim_strategy,
             args.g_clipping,
             args.d_clipping,
@@ -380,7 +387,12 @@ def optuna_objective(trial, args, config):
                         print(f'Writing checkpoint file: model_{phase}_ckpt_{global_step}')
                         saver.save(sess, os.path.join(logdir, f'model_{phase}_ckpt_{global_step}'))
                 
-                #TODO - add changes from surfgan l321-328 for split data
+                # Get randomly selected batch
+                batch = npy_data_train.batch(batch_size)
+            
+                # Normalize data (but only if args.data_mean AND args.data_stddev are defined)
+                batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
+
                 #anglepgan#ach begin #TODO
                 batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
                 batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
@@ -471,10 +483,12 @@ def optuna_objective(trial, args, config):
                     if large_summary_bool:
                         print('Writing large summary...')
                         writer.add_summary(summary_s, global_step)
+                        writer.add_summary(summary_s_val, global_step)
                         writer.add_summary(summary_l, global_step)
                     elif small_summary_bool:
                         print('Writing small summary...')
                         writer.add_summary(summary_s, global_step)
+                        writer.add_summary(summary_s_val, global_step)
                     elif speed_measurement_bool:
                         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]),
                                            global_step)
