@@ -4,6 +4,7 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
 import random
+import logging
 
 from utils import count_parameters, parse_tuple, MPMap, log0
 from utils import get_compute_metrics_dict, get_logdir, get_verbosity, get_filewriter, get_base_shape, get_num_phases, get_num_channels    #caspar TODO check get_num_phases, get_base_shape
@@ -281,6 +282,14 @@ def optuna_objective(trial, args, config):
             d_lr
         )
         #TODO check the new summary function has adel/pgan/main.py lines 403-468
+        # This is only computed on the validation dataset
+        summary_small_validation = summary.create_small_validation_summary(
+            disc_loss,
+            gen_loss,
+            gp_loss,
+            gen_sample,
+            real_image_input,
+        )
         summary_large = summary.create_large_summary(
             real_image_input,
             gen_sample
@@ -370,7 +379,8 @@ def optuna_objective(trial, args, config):
                     if verbose:
                         print(f'Writing checkpoint file: model_{phase}_ckpt_{global_step}')
                         saver.save(sess, os.path.join(logdir, f'model_{phase}_ckpt_{global_step}'))
-
+                
+                #TODO - add changes from surfgan l321-328 for split data
                 #anglepgan#ach begin #TODO
                 batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
                 batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
