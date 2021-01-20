@@ -168,7 +168,25 @@ if __name__ == '__main__':
     parser.add_argument('--final_shape', type=str, default=None, required=True, help="'(c, z, y, x)', e.g. '(1, 64, 128, 128)'")
     parser.add_argument('--starting_phase', type=int, default=None, required=True)
     parser.add_argument('--ending_phase', type=int, default=None, required=True)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--horovod', default=False, action='store_true')
+    parser.add_argument('--checkpoint_every_nsteps', default=20000, type=int, help="Checkpoint files are saved every time the globally processed image counter is (approximately) a multiple of this number. Technically, the counter needs to satisfy: counter % checkpoint_every_nsteps < global_batch_size.")
+    parser.add_argument('--logdir', default=None, type=str, help="Allows one to specify the log directory. The default is to store logs and checkpoints in the <repository_root>/runs/<network_architecture>/<datetime_stamp>. You may want to override from the batch script so you can store additional logs in the same directory, e.g. the SLURM output file, job script, etc")
+    parser.add_argument('--continue_path', default=None, type=str)
+    parser.add_argument('--starting_alpha', default=1, type=float)
+    parser.add_argument('--gpu', default=False, action='store_true')
+    parser.add_argument('--num_inter_ops', default=4, type=int)
+    parser.add_argument('--num_labels', default=None, type=int)
+    parser.add_argument('--validation_fraction', default=0.1, type=float, required=False, help="Fraction of the dataset that will be set aside for validation. Metrics are computed on the validation data set at regular intervals during training (stored in the tensorflow events file. Also see metrics_every_nsteps) and at the end of a phase (reported on the command line. Also see compute_metrics_validation). Optuna optimizes hyperparameters based on the FID computed on the validation data set.")
+    parser.add_argument('--test_fraction', default=0.1, type=float, required=False, help="Fraction of the dataset that will be set aside for testing. Metrics can be computed on the test data set at the end of each phase (see compute_metrics_test).")
+
+    # Architecture
     parser.add_argument('--latent_dim', type=int, default=None, required=True)
+    parser.add_argument('--first_conv_nfilters', type=int, default=None, required=True, help='Number of filters in the first convolutional layer. Since it is densely connected to the latent space, the number of connections can increase rapidly, hence it can be set separately from the other filter counts deeper in the network')
+    parser.add_argument('--network_size', default=None, choices=['xxs', 'xs', 's', 'm', 'l', 'xl', 'xxl'], required=True)
+    parser.add_argument('--activation', type=str, default='leaky_relu')
+    parser.add_argument('--leakiness', type=float, default=0.2)
+
     #caspar #surfgan addition of first_conv_nfilters
     parser.add_argument('--first_conv_nfilters', type=int, default=None, required=True, help='Number of filters in the first convolutional layer. Since it is densely connected to the latent space, the number of connections can increase rapidly, hence it can be set separately from the other filter counts deeper in the network')
     parser.add_argument('--network_size', default=None, choices=['xxs', 'xs', 's', 'm', 'l', 'xl', 'xxl'], required=True)
@@ -187,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('--g_lr_decay_niter', type=int, default=0, help='If a learning rate schedule with a gradual decrease at the end of a phase is defined for the generator, this defines within how many iterations the minimum is reached.')
     parser.add_argument('--d_lr_rise_niter', type=int, default=0, help='If a learning rate schedule with a gradual increase in the beginning of a phase is defined for the discriminator, this number defines within how many iterations the maximum is reached.')
     parser.add_argument('--d_lr_decay_niter', type=int, default=0, help='If a learning rate schedule with a gradual decrease at the end of a phase is defined for the discriminator, this defines within how many iterations the minimum is reached.')
-    parser.add_argument('--loss_fn', default='logistic', choices=['logistic', 'wgan', 'anglegan', 'anglegan2'])
+    parser.add_argument('--loss_fn', default='logistic', choices=['logistic', 'wgan', 'anglegan', 'anglegan2'])   #anglepgan #emmac #ach
     parser.add_argument('--loss_weights', action='store', type=int, default=[3, 25, 0.1], help='loss weights =[gen_weight, aux_weight, ang_weight, ecal_weight, add loss weight]')
     #parser.add_argument('--loss_weights', action='store', type=int, default=[3, 0.1, 25, 0.1, 0.1], help='loss weights =[gen_weight, aux_weight, ang_weight, ecal_weight, add loss weight]')
     parser.add_argument('--gp_weight', type=float, default=1)
@@ -198,10 +216,6 @@ if __name__ == '__main__':
     #caspar #surfgan addition of optuna_distributed
     parser.add_argument('--optuna_distributed', default=False, action='store_true', help="Pass this argument if you want to run optuna in distributed fashion. Run should be started as an mpi program (i.e. launching with mpirun or srun). Each MPI rank will work on its own Optuna trial. Do NOT combine with --horovod: parallelization happens at the trial level, it should NOT also be done within trials.")
     parser.add_argument('--calc_metrics', default=False, action='store_true')
-    parser.add_argument('--g_annealing', default=1,
-                        type=float, help='generator annealing rate, 1 -> no annealing.')
-    parser.add_argument('--d_annealing', default=1,
-                        type=float, help='discriminator annealing rate, 1 -> no annealing.')
     parser.add_argument('--beta1', type=float, default=0)
     parser.add_argument('--beta2', type=float, default=0.9)
     parser.add_argument('--ema_beta', type=float, default=0.99)
@@ -223,7 +237,6 @@ if __name__ == '__main__':
     #caspar #surfgan summary_large_every_nsteps changed from 1000 in #anglepgan to 64 in #caspar #surfgan                 
     parser.add_argument('--summary_small_every_nsteps', default=32, type=int, help="Summaries are saved every time the locally processsed image counter is a multiple of this number")
     parser.add_argument('--summary_large_every_nsteps', default=64, type=int, help="Large summaries such as images are saved every time the locally processed image counter is a multiple of this number")
-    # parser.add_argument('--load_phase', default=None, type=int)
     parser.add_argument('--num_metric_samples', type=int, default=None, help="Number of samples used to compute the metrics are computed. A higher number of samples will be more accurate (show less variation in metrics between iterations), but take more time to compute.")
     parser.add_argument('--metrics_every_nsteps', default=128, type=int, help="Metrics are computed every time the locally processed image counter is a multiple of this number")
     parser.add_argument('--metrics_batch_size', default=16, type=int, help="Batch size used for computing the metrics. Note that metrics computation is often a lot lighter than training, so memory limits are less like to be a problem.")
@@ -234,13 +247,27 @@ if __name__ == '__main__':
     parser.add_argument('--compute_psnrs', default=False, action='store_true', help="Whether to compute the peak signal to noise ratio (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
     parser.add_argument('--compute_mses', default=False, action='store_true', help="Whether to compute the mean squared error (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
     parser.add_argument('--compute_nrmses', default=False, action='store_true', help="Whether to compute the normalized mean squared error (frequency determined by metrics_every_nsteps). Not very meaningfull for GANs...")
-    parser.add_argument('--checkpoint_every_nsteps', default=20000, type=int, help="Checkpoint files are saved every time the globally processed image counter is (approximately) a multiple of this number. Technically, the counter needs to satisfy: counter % checkpoint_every_nsteps < global_batch_size.")
-    parser.add_argument('--logdir', default=None, type=str, help="Allows one to specify the log directory. The default is to store logs and checkpoints in the <repository_root>/runs/<network_architecture>/<datetime_stamp>. You may want to override from the batch script so you can store additional logs in the same directory, e.g. the SLURM output file, job script, etc")
+    #parser.add_argument('--checkpoint_every_nsteps', default=20000, type=int, help="Checkpoint files are saved every time the globally processed image counter is (approximately) a multiple of this number. Technically, the counter needs to satisfy: counter % checkpoint_every_nsteps < global_batch_size.")
+    #parser.add_argument('--logdir', default=None, type=str, help="Allows one to specify the log directory. The default is to store logs and checkpoints in the <repository_root>/runs/<network_architecture>/<datetime_stamp>. You may want to override from the batch script so you can store additional logs in the same directory, e.g. the SLURM output file, job script, etc")
+    # Optuna
+    parser.add_argument('--optuna_distributed', default=False, action='store_true', help="Pass this argument if you want to run optuna in distributed fashion. Run should be started as an mpi program (i.e. launching with mpirun or srun). Each MPI rank will work on its own Optuna trial. Do NOT combine with --horovod: parallelization happens at the trial level, it should NOT also be done within trials.")
     parser.add_argument('--optuna_ntrials', default=100, type=int, help="Sets the number of Optuna Trials to do")
     parser.add_argument('--optuna_use_best_trial', default=None, type=str, help="SQlite Optuna database file. This will run the training with the parameters from the best_trial in the first study in that database.")
-    parser.add_argument('--noise_stddev', default=None, type=float, required=True, help="Normally distributed noise is added to the inputs before training. This argument specifies the standard deviation of that normal distribution, and thus the magnitude of that noise. Adding noise that is of the same order as the real noise in your image likely has the best effect.")
+    parser.add_argument('--noise_stddev', default=None, type=float, required=True, help="Normally distributed noise is added to the inputs before training ('instance noise', see e.g. https://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/). This argument specifies the standard deviation of that normal distribution, and thus the magnitude of that noise. Adding noise that is of the same order as the real noise in your image likely has the best effect.")    
+    # input data normalization
     parser.add_argument('--data_mean', default=None, type=float, required=False, help="Mean of the input data. Used for input normalization. E.g. in the case of CT scans, this would be the mean CT value over all scans. Note: normalization is only performed if both data_mean and data_stddev are defined.")
     parser.add_argument('--data_stddev', default=None, type=float, required=False, help="Standard deviation of the input data. Used for input normalization. E.g. in the case of CT scans, this would be the standard deviation of CT values over all scans. Note: normalization is only performed if both data_mean and data_stddev are defined.")
+    # Not sure if these do anything anymore...
+    parser.add_argument('--g_annealing', default=1,
+                        type=float, help='generator annealing rate, 1 -> no annealing.')
+    parser.add_argument('--d_annealing', default=1,
+                        type=float, help='discriminator annealing rate, 1 -> no annealing.')
+
+    # Metrics
+    parser.add_argument('--calc_metrics', default=False, action='store_true')
+    parser.add_argument('--compute_metrics_train', default=False, action='store_true', help="If defined, all metrics will be computed on the full training data set at the end of a resolution step / 'phase' (not recommended, very time consuming).")
+    parser.add_argument('--compute_metrics_validation', default=True, action='store_true', help="If defined, all metrics will be computed on the full validation data set at the end of a resolution step / 'phase' (recommended, but time consuming).")
+    parser.add_argument('--compute_metrics_test', default=True, action='store_true', help="If defined, all metrics will be computed on the full test data set at the end of a resolution step / 'phase' (recommended, but time consuming).")
     ###############################################caspar #surfgan added params END
                   
     args = parser.parse_args()
