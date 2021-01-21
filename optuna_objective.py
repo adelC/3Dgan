@@ -98,32 +98,49 @@ def optuna_objective(trial, args, config):
 
         # Get NumpyPathDataset object for current phase. It's an iterable object that returns the path to samples in the dataset
         # caspar method (#TODO check) - npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
-        size = start_resolution * (2 ** (phase - 1))
+        
+        #AnglePGAN #ACH --- Commenting bloc code / Begin
+        #size = start_resolution * (2 ** (phase - 1))
        
         #anglepgan#ach
-        data_path = os.path.join(args.dataset_path, f'{size}x{size}/')
+        #data_path = os.path.join(args.dataset_path, f'{size}x{size}/')
         
         #anglepgan#ach
-        npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
+        #npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
-        npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
+        #npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
-        npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
+        #npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
-        npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
+        #npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
-        if verbose:
-            print(f'Phase {phase}: reading data from dir {data_path}')
-        npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+        #if verbose:
+        #    print(f'Phase {phase}: reading data from dir {data_path}')
+        #npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
+        #                            is_correct_phase=phase >= args.starting_phase)
         
+        #AnglePGAN #ACH --- Commenting bloc code / End
+        
+
+        
+        #AnglePGAN #ACH - better adapting  get_numpy_dataset if needed rather then using NumpyPathDataset
         #caspar #surfgan #TODO choose over line 116?
         # Get NumpyPathDataset object for current phase. It's an iterable object that returns the path to samples in the dataset
-        #npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
+        #AnglePGAN #ACH: Begin - better adapting  get_numpy_dataset if needed rather then using NumpyPathDataset
+        npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
+        npy_en = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
+        npy_ang = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
+        npy_ecal = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        #AnglePGAN #ACH: End
+        
         
         #CASPAR #TODO: we should probably split the npy_data in a train and validation set. The validation set can then be passed to save_metrics to compute the metrics on.
         # Note: the split below preserves the ordering of npy_data. Thus, similar filenames tend to either end up all in the training or validation set.
