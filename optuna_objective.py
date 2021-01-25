@@ -183,7 +183,11 @@ def optuna_objective(trial, args, config):
 
         # Create input tensor
         real_image_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
-
+        
+        #anglepgan #ach - creating imput tensor for en ang ang (dataset used to condition the GAN training) #ToDo
+        #energy_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
+        #angle_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
+        
         #anglepgan#ach
         e_p_shape = [batch_size, 1]
         ang_shape = [batch_size, 1]
