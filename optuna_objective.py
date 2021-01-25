@@ -420,8 +420,13 @@ def optuna_objective(trial, args, config):
                 
                 # Get randomly selected batch
                 batch = npy_data_train.batch(batch_size)
+                
+                #anglepgan #ach
+                batch_en = npy_en.batch(batchsize)
+                batch_ang = npy_ang.batch(batchsize)
+                batch_ecal = npy_ecal.batch(batchsize)
             
-                # Normalize data (but only if args.data_mean AND args.data_stddev are defined)
+                # Normalize data (but only if args.data_mean AND args.data_stddev are defined
                 batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
 
                 #anglepgan#ach begin #TODO
