@@ -473,11 +473,11 @@ def optuna_objective(trial, args, config):
                 if large_summary_bool:
                     _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small, summary_large,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch})
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p : batch_en, ang : batch_ang}) #anglepgan #ach #ToDo
                 elif small_summary_bool:
                     _, _, summary_s, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch})
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch}) #anglepgan #ach #ToDo
                 else:
                     _, _, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, disc_loss, gen_loss],
@@ -486,8 +486,14 @@ def optuna_objective(trial, args, config):
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
                     batch_val = npy_data_validation.batch(batch_size)
+                    
+                    #anglepgan #ach #ToDo
+                    batch_en_val = npy_en_val.batch(batchsize)
+                    batch_ang_val = npy_ang_val.batch(batchsize)
+                    batch_ecal_val = npy_ecal_val.batch(batchsize)
+                  
                     batch_val = data.normalize_numpy(batch_val, args.data_mean, args.data_stddev, verbose)
-                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val})
+                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val, e_p : batch_en_val, ang : batch_ang_val }) #anglepgan #ach #ToDo
                   
                 #print("Completed step")
                 global_step += batch_size * global_size
