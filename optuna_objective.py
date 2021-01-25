@@ -107,16 +107,18 @@ def optuna_objective(trial, args, config):
         
         #anglepgan#ach
         #npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+        #                            is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
         #npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+        #                            is_correct_phase=phase >= args.starting_phase)
         #anglepgan#ach
         #npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+        #                            is_correct_phase=phase >= args.starting_phase)
+        
         #anglepgan#ach
         #npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+        #                            is_correct_phase=phase >= args.starting_phase)
+        
         #anglepgan#ach
         #if verbose:
         #    print(f'Phase {phase}: reading data from dir {data_path}')
