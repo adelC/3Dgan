@@ -77,6 +77,19 @@ def optuna_objective(trial, args, config):
     en_path = os.path.join(args.dataset_path, f'en/')
     ang_path = os.path.join(args.dataset_path, 'ang/')
     ecal_path = os.path.join(args.dataset_path, 'ecal/')
+    
+    
+    #anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent 
+    npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
+                                    is_correct_phase=phase >= args.starting_phase)
+    #anglepgan#ach
+    npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
+                                    is_correct_phase=phase >= args.starting_phase)
+        
+    #anglepgan#ach
+    npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
+                                    is_correct_phase=phase >= args.starting_phase)
+      
 
     # Loop over the different phases (resolutions) of training of a progressive architecture
     for phase in range(1, get_num_phases(args.start_shape, args.final_shape) + 1):   #TODO check diff num_phases
@@ -108,6 +121,10 @@ def optuna_objective(trial, args, config):
         #anglepgan#ach
         #npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
         #                            is_correct_phase=phase >= args.starting_phase)
+        
+        #AnglePGAN #ACH: Begin - better adapting  get_numpy_dataset if needed rather then using NumpyPathDataset
+        npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
+        
         #anglepgan#ach
         #npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
         #                            is_correct_phase=phase >= args.starting_phase)
@@ -122,26 +139,15 @@ def optuna_objective(trial, args, config):
         #anglepgan#ach
         #if verbose:
         #    print(f'Phase {phase}: reading data from dir {data_path}')
+        #ach erro : npy_data doubled - to be removed
         #npy_data = NumpyPathDataset(data_path, args.scratch_path, copy_files=local_rank == 0,
         #                            is_correct_phase=phase >= args.starting_phase)
         
         #AnglePGAN #ACH --- Commenting bloc code / End
-        
-
-        
+          
         #AnglePGAN #ACH - better adapting  get_numpy_dataset if needed rather then using NumpyPathDataset
         #caspar #surfgan #TODO choose over line 116?
         # Get NumpyPathDataset object for current phase. It's an iterable object that returns the path to samples in the dataset
-        
-        #AnglePGAN #ACH: Begin - better adapting  get_numpy_dataset if needed rather then using NumpyPathDataset
-        npy_data = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
-        
-        npy_en = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
-        
-        npy_ang = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
-        
-        npy_ecal = get_numpy_dataset(phase, args.starting_phase, args.start_shape, args.dataset_path, args.scratch_path, verbose)
-        #AnglePGAN #ACH: End
         
         
         #CASPAR #TODO: we should probably split the npy_data in a train and validation set. The validation set can then be passed to save_metrics to compute the metrics on.
