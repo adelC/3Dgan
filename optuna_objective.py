@@ -164,8 +164,9 @@ def optuna_objective(trial, args, config):
         batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
 
         if phase >= args.starting_phase:
-            print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan#ach
-            assert batch_size * global_size <= args.max_global_batch_size    #CASPAR has this commented out
+            #ach - keeping the new Caspar code changes as much as possible -> commenting the code 
+            #print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan#ach
+            #assert batch_size * global_size <= args.max_global_batch_size    #CASPAR has this commented out
             if verbose:
                 print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
 
