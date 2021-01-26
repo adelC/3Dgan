@@ -331,6 +331,8 @@ def optuna_objective(trial, args, config):
             max_d_norm,
             gen_sample,
             real_image_input,
+            energy_input,
+            ang_input,
             alpha,
             g_lr,
             d_lr
