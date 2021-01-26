@@ -18,20 +18,20 @@ def forward_generator(generator,
                       network_size,
                       loss_fn,
                       loss_weights,     #anglepgan#emmac
-                      e_p,              #anglepgan#emmac
-                      ang,              #anglepgan#emmac   
+                      energy_input,              #anglepgan#emmac
+                      ang_input,              #anglepgan#emmac   
                       noise_stddev,     #TODO
                       is_reuse=False
                       ):
     #anglepgan#emmac START
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
-    #Adel is passing e_p and ang as the correct batch sized numpy arrays
-    e_p_tensor = tf.reshape(e_p, [z_batch_size,1])   # need z_batch_size x 1
-    ang_tensor = tf.reshape(ang, [z_batch_size,1])   # need z_batch_size x 1
+    #Adel is passing energy_input and ang as the correct batch sized numpy arrays
+    energy_input_tensor = tf.reshape(energy_input, [z_batch_size,1])   # need z_batch_size x 1
+    ang_input_tensor = tf.reshape(ang_input, [z_batch_size,1])   # need z_batch_size x 1
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)
+    z = tf.concat([z, energy_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)
     #anglepgan#emmac END
     
     gen_sample = generator(z, alpha, phase, num_phases,
@@ -77,8 +77,8 @@ def forward_discriminator(generator,
                           loss_fn,
                           gp_weight,
                           loss_weights,   #anglepgan#emmac
-                          e_p,            #anglepgan#emmac
-                          ang,            #anglepgan#emmac
+                          enery_input,            #anglepgan#emmac
+                          ang_input,            #anglepgan#emmac
                           noise_stddev,   #TODO
                           is_reuse=False,
                           ):
@@ -87,11 +87,11 @@ def forward_discriminator(generator,
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
-    e_p_tensor = tf.reshape(e_p, [z_batch_size,1])   # need z_batch_size x 1
-    ang_tensor = tf.reshape(ang, [z_batch_size,1])   # need z_batch_size x 1
+    enery_input_tensor = tf.reshape(enery_input, [z_batch_size,1])   # need z_batch_size x 1
+    ang_input_tensor = tf.reshape(ang_input, [z_batch_size,1])   # need z_batch_size x 1
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)
+    z = tf.concat([z, enery_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)
     #anglepgan#emmac END    
     
     gen_sample = generator(z, alpha, phase, num_phases,
@@ -180,8 +180,8 @@ def forward_simultaneous(generator,
                          loss_fn,
                          gp_weight,
                          loss_weights,     #anglepgan#emmac
-                         e_p,     #anglepgan#emmac
-                         ang,     #anglepgan#emmac
+                         enery_input,     #anglepgan#emmac
+                         ang_input,     #anglepgan#emmac
                          noise_stddev,
                          conditioning=None
                          ):
@@ -190,11 +190,11 @@ def forward_simultaneous(generator,
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
-    e_p_tensor = tf.reshape(e_p, [z_batch_size,1])   # need z_batch_size x 1
-    ang_tensor = tf.reshape(ang, [z_batch_size,1])   # need z_batch_size x 1
+    enery_input_tensor = tf.reshape(enery_input, [z_batch_size,1])   # need z_batch_size x 1
+    ang_input_tensor = tf.reshape(ang_input, [z_batch_size,1])   # need z_batch_size x 1
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, e_p_tensor, ang_tensor], 1)    # shape = (z_batch_size, 256)    gen_sample = generator(z, alpha, phase, num_phases,
+    z = tf.concat([z, enery_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)    gen_sample = generator(z, alpha, phase, num_phases,
                            base_dim, base_shape, activation=activation,
                            param=leakiness, size=network_size, conditioning=conditioning)
     #anglepgan#emmac#ach END
