@@ -34,7 +34,7 @@ def minimize_with_clipping(optimizer, loss, var_list, clipping):
 
     return train_op, gradients, variables, max_norm
 
-def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_image_input, energy_input, ang_input, latent_dim, alpha, phase,
+def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_image_input, energy_input, ang_input, loss_weights,latent_dim, alpha, phase,
     num_phases, base_dim, base_shape, activation, leakiness, network_size, loss_fn, gp_weight, optim_strategy, g_clipping, d_clipping, noise_stddev):
     """Defines the op for a single optimization step.
     Parameters:
