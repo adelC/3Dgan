@@ -157,6 +157,18 @@ def optuna_objective(trial, args, config):
         # By splitting this way, we avoid as much as possible that correlated scans end up in both training and validation sets.
         npy_data_train, npy_data_testval = npy_data.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
         npy_data_validation, npy_data_test = npy_data_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        
+        #ach #anglepgan - Begin
+        npy_en_train, npy_en_testval = npy_en.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
+        npy_en_validation, npy_en_test = npy_en_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        
+        npy_ang_train, npy_ang_testval = npy_ang.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
+        npy_ang_validation, npy_ang_test = npy_ang_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        
+        npy_ecal_train, npy_ecal_testval = npy_ecal.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
+        npy_ecal_validation, npy_ecal_test = npy_ecal_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        #ach #anglepgan - End
+        
         if verbose:
             print(f"Split dataset of {len(npy_data)} samples: train {len(npy_data_train)}, validation {len(npy_data_validation)}, test {len(npy_data_test)}")
 
