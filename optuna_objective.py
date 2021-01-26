@@ -280,6 +280,8 @@ def optuna_objective(trial, args, config):
             generator,
             discriminator,
             real_image_input,
+            energy_input,  #TODO #anglepgan #ach check placement
+            ang_input, #TODO #anglepgan #ach check placement
             args.latent_dim,
             alpha,
             phase,
@@ -292,8 +294,6 @@ def optuna_objective(trial, args, config):
             args.loss_fn,
             args.loss_weights,
             args.gp_weight,
-            energy_input,  #TODO #anglepgan #ach check placement
-            ang_input, #TODO #anglepgan #ach check placement
             args.optim_strategy,
             args.g_clipping,
             args.d_clipping,
