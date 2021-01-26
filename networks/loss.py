@@ -76,11 +76,10 @@ def forward_discriminator(generator,
                           network_size,
                           loss_fn,
                           gp_weight,
-                          noise_stddev,   #TODO
                           loss_weights,   #anglepgan#emmac
-                          gp_weight,      #anglepgan#emmac
                           e_p,            #anglepgan#emmac
                           ang,            #anglepgan#emmac
+                          noise_stddev,   #TODO
                           is_reuse=False,
                           ):
     
@@ -178,8 +177,9 @@ def forward_simultaneous(generator,
                          activation,
                          leakiness,
                          network_size,
-                         loss_weights,     #anglepgan#emmac
+                         loss_fn,
                          gp_weight,
+                         loss_weights,     #anglepgan#emmac
                          e_p,     #anglepgan#emmac
                          ang,     #anglepgan#emmac
                          noise_stddev,
