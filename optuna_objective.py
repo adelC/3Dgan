@@ -74,13 +74,13 @@ def optuna_objective(trial, args, config):
     global_step = 0
     
     #anglepgan#ach
-    en_path = os.path.join(args.dataset_path, f'en/')
+    energy_path = os.path.join(args.dataset_path, f'en/')
     ang_path = os.path.join(args.dataset_path, 'ang/')
     ecal_path = os.path.join(args.dataset_path, 'ecal/')
     
     
     #anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent 
-    npy_en = NumpyPathDataset(en_path, args.scratch_path, copy_files=local_rank == 0,
+    npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=local_rank == 0,
                                     is_correct_phase=phase >= args.starting_phase)
     #anglepgan#ach
     npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
@@ -159,8 +159,8 @@ def optuna_objective(trial, args, config):
         npy_data_validation, npy_data_test = npy_data_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
         
         #ach #anglepgan - Begin
-        npy_en_train, npy_en_testval = npy_en.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
-        npy_en_validation, npy_en_test = npy_en_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        npy_energy_train, npy_energy_testval = npy_energy.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
+        npy_energy_validation, npy_energy_test = npy_energy_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
         
         npy_ang_train, npy_ang_testval = npy_ang.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
         npy_ang_validation, npy_ang_test = npy_ang_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
@@ -200,13 +200,13 @@ def optuna_objective(trial, args, config):
         #energy_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
         #angle_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
         
-        #anglepgan#ach
-        e_p_shape = [batch_size, 1]
+        #anglepgan #ach
+        energy_shape = [batch_size, 1]
         ang_shape = [batch_size, 1]
-        e_p = tf.placeholder(shape=e_p_shape, dtype=tf.float32)
-        ang = tf.placeholder(shape=ang_shape, dtype=tf.float32)
-
-        #anglepgan#ach
+        energy_input = tf.placeholder(shape=energy_shape, dtype=tf.float32)
+        ang_input = tf.placeholder(shape=ang_shape, dtype=tf.float32)
+        #anglepgan #ach
+        
         real_label = None
         if real_label is not None:
             real_label = tf.one_hot(real_label, depth=args.num_labels)
@@ -292,8 +292,8 @@ def optuna_objective(trial, args, config):
             args.loss_fn,
             args.loss_weights,
             args.gp_weight,
-            e_p,  #TODO #anglepgan #ach check placement
-            ang, #TODO #anglepgan #ach check placement
+            energy_input,  #TODO #anglepgan #ach check placement
+            ang_input, #TODO #anglepgan #ach check placement
             args.optim_strategy,
             args.g_clipping,
             args.d_clipping,
@@ -438,7 +438,7 @@ def optuna_objective(trial, args, config):
                 batch = npy_data_train.batch(batch_size)
                 
                 #anglepgan #ach
-                batch_en = npy_en.batch(batchsize)
+                batch_energy = npy_energy.batch(batchsize)
                 batch_ang = npy_ang.batch(batchsize)
                 batch_ecal = npy_ecal.batch(batchsize)
             
@@ -446,20 +446,20 @@ def optuna_objective(trial, args, config):
                 batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
 
                 #anglepgan#ach begin #TODO
-                batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
-                batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
-                batch_en = np.stack([np.load(path) for path in batch_paths_en])
-                batch_en = batch_en[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
+                #batch_loc_en = np.random.randint(0, len(npy_en) - batch_size)
+                #batch_paths_en = npy_en[batch_loc_en: batch_loc_en + batch_size]
+                #batch_en = np.stack([np.load(path) for path in batch_paths_en])
+                #batch_en = batch_en[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
 
-                batch_loc_ang = np.random.randint(0, len(npy_ang) - batch_size)
-                batch_paths_ang = npy_ang[batch_loc_ang: batch_loc_ang + batch_size]
-                batch_ang = np.stack([np.load(path) for path in batch_paths_ang])
-                batch_ang = batch_ang[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
+                #batch_loc_ang = np.random.randint(0, len(npy_ang) - batch_size)
+                #batch_paths_ang = npy_ang[batch_loc_ang: batch_loc_ang + batch_size]
+                #batch_ang = np.stack([np.load(path) for path in batch_paths_ang])
+                #batch_ang = batch_ang[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
 
-                batch_loc_ecal = np.random.randint(0, len(npy_ecal) - batch_size)
-                batch_paths_ecal = npy_ecal[batch_loc_ecal: batch_loc_ecal + batch_size]
-                batch_ecal = np.stack([np.load(path) for path in batch_paths_ecal])
-                batch_ecal = batch_ecal[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
+                #batch_loc_ecal = np.random.randint(0, len(npy_ecal) - batch_size)
+                #batch_paths_ecal = npy_ecal[batch_loc_ecal: batch_loc_ecal + batch_size]
+                #batch_ecal = np.stack([np.load(path) for path in batch_paths_ecal])
+                #batch_ecal = batch_ecal[:, np.newaxis, ...].astype(np.float32) / 1024 - 1
                 #anglepgan#ach end
 
                 #COMMENTED THIS OUT, #TODO CHECK - bc sofia said normalizing may mess with our data bc of the wide range of values
@@ -485,27 +485,27 @@ def optuna_objective(trial, args, config):
                 if large_summary_bool:
                     _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small, summary_large,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch, e_p : batch_en, ang : batch_ang}) #anglepgan #ach #ToDo
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
                 elif small_summary_bool:
                     _, _, summary_s, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch}) #anglepgan #ach #ToDo
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
                 else:
                     _, _, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, disc_loss, gen_loss],
-                         feed_dict={real_image_input: batch})
+                         feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang})
                
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
                     batch_val = npy_data_validation.batch(batch_size)
                     
                     #anglepgan #ach #ToDo
-                    batch_en_val = npy_en_val.batch(batchsize)
+                    batch_energy_val = npy_energy_val.batch(batchsize)
                     batch_ang_val = npy_ang_val.batch(batchsize)
                     batch_ecal_val = npy_ecal_val.batch(batchsize)
                   
                     batch_val = data.normalize_numpy(batch_val, args.data_mean, args.data_stddev, verbose)
-                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val, e_p : batch_en_val, ang : batch_ang_val }) #anglepgan #ach #ToDo
+                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val, energy_input : batch_energy_val, ang_input : batch_ang_val} }) #anglepgan #ach #ToDo
                   
                 #print("Completed step")
                 global_step += batch_size * global_size
