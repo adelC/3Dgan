@@ -178,7 +178,7 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
         filter_list = [512, 512, 128, 128, 64, 32, 16, 8]
     elif size == 'm':
         filter_list = [1024, 1024, 256, 256, 128, 64, 32, 16]
-#        filter_list = [256, 256, 128, 64, 32, 16]
+        #filter_list = [256, 256, 128, 64, 32, 16]
     elif size == 'l':
         filter_list = [2048, 2048, 512, 512, 256, 128, 64, 32]
     elif size == 'xl':
@@ -206,7 +206,7 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
     filters = filter_list[index]
     #print(f"DEBUG: log_product={log_product}, index={index}, filters={filters}")
     # filters = filter_list[phase - 1]
-# print(f"DEBUG: returning num_filters: {filters}")
+    # print(f"DEBUG: returning num_filters: {filters}")
     return filters
 
 
