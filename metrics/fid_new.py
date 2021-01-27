@@ -701,15 +701,3 @@ if __name__ == "__main__":
             fid_value = calculate_fid_given_batch_volumes(volumes_real, volumes_fake, sess)
 
         print("FID: ", fid_value)
-      
-if __name__ == "__main__":
-
-        volumes_real = ((np.random.rand(1, 1, 16, 64, 64) * 3072) - 1024).astype(int)
-        volumes_fake = ((np.random.rand(1, 1, 16, 64, 64) * 3072) - 1024).astype(int)
-
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-
-            fid_value = calculate_fid_given_batch_volumes(volumes_real, volumes_fake, sess)
-
-        print("FID: ", fid_value)
