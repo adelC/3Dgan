@@ -553,9 +553,9 @@ def optuna_objective(trial, args, config):
                     elif speed_measurement_bool:
                         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]),
                                            global_step)
-                    if args.optuna_use_best_trial is not None or args.optuna_ntrials == 1:
+                    if args.optuna_use_best_trial or args.optuna_ntrials == 1 or hyperparam_opt_intra_trial or normal_run:
                         print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss, d_lr_val, g_lr_val, alpha)
-
+                  
                 # Is only executed once per phase, because the mixing_bool is then flipped to False
                 if mixing_bool and (global_step >= ((phase - args.starting_phase)
                                    * (args.mixing_nimg + args.stabilizing_nimg)
