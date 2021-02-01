@@ -52,8 +52,8 @@ def forward_generator(generator,
     elif loss_fn == 'logistic':
         gen_loss = tf.reduce_mean(tf.nn.softplus(-disc_fake_g))
   
-  #anglepgan#emmac#ach
-  elif loss_fn == 'anglegan':
+    #anglepgan#emmac#ach
+    elif loss_fn == 'anglegan':
         gen_loss = tf.reduce_mean(-disc_fake_g) #TODO
       
     else:
@@ -77,7 +77,7 @@ def forward_discriminator(generator,
                           loss_fn,
                           gp_weight,
                           loss_weights,   #anglepgan#emmac
-                          enery_input,            #anglepgan#emmac
+                          energy_input,            #anglepgan#emmac
                           ang_input,            #anglepgan#emmac
                           noise_stddev,   #TODO
                           is_reuse=False,
@@ -180,7 +180,7 @@ def forward_simultaneous(generator,
                          loss_fn,
                          gp_weight,
                          loss_weights,     #anglepgan#emmac
-                         enery_input,     #anglepgan#emmac
+                         energy_input,     #anglepgan#emmac
                          ang_input,     #anglepgan#emmac
                          noise_stddev,
                          conditioning=None
@@ -190,11 +190,13 @@ def forward_simultaneous(generator,
     z_batch_size = tf.shape(real_image_input)[0]                 # this value should be an integer
 
     #Adel is passing e_p and ang as the correct batch sized numpy arrays
-    enery_input_tensor = tf.reshape(enery_input, [z_batch_size,1])   # need z_batch_size x 1
+    energy_input_tensor = tf.reshape(energy_input, [z_batch_size,1])   # need z_batch_size x 1
     ang_input_tensor = tf.reshape(ang_input, [z_batch_size,1])   # need z_batch_size x 1
 
     z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, enery_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)    gen_sample = generator(z, alpha, phase, num_phases,
+    z = tf.concat([z, energy_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)    
+    
+    gen_sample = generator(z, alpha, phase, num_phases,
                            base_dim, base_shape, activation=activation,
                            param=leakiness, size=network_size, conditioning=conditioning)
     #anglepgan#emmac#ach END
@@ -205,13 +207,13 @@ def forward_simultaneous(generator,
     gen_sample_noisy = gen_sample #+ tf.random.normal(shape=tf.shape(gen_sample)) * noise_stddev
 
     # Discriminator Training   #TODO - do we need to feed through the ng and ecal and loss weights here???
-    disc_fake_d = discriminator(tf.stop_gradient(gen_sample_noisy), alpha, phase, num_phases,
+    disc_fake_d, fake_ecal, fake_ang = discriminator(tf.stop_gradient(gen_sample_noisy), alpha, phase, num_phases,
                                 base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                                 size=network_size, conditioning=conditioning)
-    disc_real = discriminator(real_image_input, alpha, phase, num_phases,
+    disc_real, real_ecal, real_ang  = discriminator(real_image_input, alpha, phase, num_phases,
                               base_shape, base_dim, latent_dim, activation=activation, param=leakiness,
                               is_reuse=True, size=network_size, conditioning=conditioning)
-
+    
     gamma = tf.random_uniform(shape=[tf.shape(real_image_input)[0], 1, 1, 1, 1], minval=0., maxval=1.)
     interpolates = gamma * real_image_input + (1 - gamma) * tf.stop_gradient(gen_sample_noisy)
 
@@ -243,7 +245,7 @@ def forward_simultaneous(generator,
    
   #################################################anglepgan#ach#emmac START
      
-   elif loss_fn == 'anglegan':   # NEEDS TO BE TESTED + DEBUGGED!!
+    elif loss_fn == 'anglegan':   # NEEDS TO BE TESTED + DEBUGGED!!
         gradient_penalty = tf.reduce_mean(slopes ** 2)
         fake_loss = bce(disc_real, disc_fake_d)     # NOT SURE!! CHECK!
         # need to use ecal_angle() in conditional lambda layer (in d) to find ang_output/ang_target
