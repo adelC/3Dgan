@@ -26,7 +26,7 @@ def optuna_override_undefined(args, trial):
       args: the argument list, where values of None have been filled by optuna suggested values
     """
     verbose = get_verbosity(args.horovod, args.optuna_distributed)
-
+    #verbose = True
     if not args.base_batch_size:
         args.base_batch_size = 2 ** trial.suggest_int('base_batch_size_exponent', 1, 6)
         if verbose:

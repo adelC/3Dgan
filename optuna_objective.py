@@ -15,7 +15,7 @@ from optuna_suggestions import optuna_override_undefined
 import os
 import importlib
 from networks.loss import forward_simultaneous, forward_generator, forward_discriminator
-
+from dataset import NumpyPathDataset
 from metrics.save_metrics import save_metrics
 
 import networks as nw
@@ -36,9 +36,9 @@ def optuna_objective(trial, args, config):
     # Note: this means that when restoring from an optuna FrozenTrial, command line parameters take precedence!
     args = optuna_override_undefined(args_copy, trial)
 
-    # Importing modules by name for the generator and discriminator
-    discriminator = importlib.import_module(f'networks.pgan.{args.architecture}.discriminator').discriminator    #anglepgan#emmac
-    generator = importlib.import_module(f'networks.pgan.{args.architecture}.generator').generator   #anglepgan#emmac
+    # Importing modules by name for the generator and discriminator #ach : removing pgan from the path
+    discriminator = importlib.import_module(f'networks.{args.architecture}.discriminator').discriminator    #anglepgan#emmac
+    generator = importlib.import_module(f'networks.{args.architecture}.generator').generator   #anglepgan#emmac
 
     # Set verbosity:
     verbose = get_verbosity(args.horovod, args.optuna_distributed)
@@ -64,9 +64,9 @@ def optuna_objective(trial, args, config):
     base_dim = args.first_conv_nfilters    #TODO check that param is passed, its diff in anglegan
 
     if verbose:
-        print(f"Start resolution: {start_resolution}")   #anglepgan#ach
-        print(f"Final resolution: {final_resolution}")   #anglepgan#ach
-        print(f"Deduced number of phases: {num_phases}") #anglepgan#ach
+        #print(f"Start resolution: {start_resolution}")   #anglepgan#ach
+        #print(f"Final resolution: {final_resolution}")   #anglepgan#ach
+        #print(f"Deduced number of phases: {num_phases}") #anglepgan#ach
         print(f"Deduced number of phases: {get_num_phases(args.start_shape, args.final_shape)}")
         print(f"base_dim: {base_dim}")
 
@@ -80,16 +80,12 @@ def optuna_objective(trial, args, config):
     
     
     #anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent 
-    npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+    npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
     #anglepgan#ach
-    npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
+    npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
         
     #anglepgan#ach
-    npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=local_rank == 0,
-                                    is_correct_phase=phase >= args.starting_phase)
-      
+    npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
 
     # Loop over the different phases (resolutions) of training of a progressive architecture
     for phase in range(1, get_num_phases(args.start_shape, args.final_shape) + 1):   #TODO check diff num_phases
@@ -175,19 +171,19 @@ def optuna_objective(trial, args, config):
         # Get DataLoader
         batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
 
-        if phase >= args.starting_phase:
+        #if phase >= args.starting_phase:
             #ach - keeping the new Caspar code changes as much as possible -> commenting the code 
             #print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan#ach
             #assert batch_size * global_size <= args.max_global_batch_size    #CASPAR has this commented out
-            if verbose:
-                print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
+        #    if verbose:
+        #        print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
 
         #anglepgan#ach
-        current_shape = [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in
-                                                       base_shape[1:]]]
+        #current_shape = [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in
+        #                                               base_shape[1:]]]
         #anglepgan#ach
-        if verbose:
-            print(f'base_shape: {base_shape}, current_shape: {current_shape}')
+        #if verbose:
+        #    print(f'base_shape: {base_shape}, current_shape: {current_shape}')
 
         # Num_metric_samples is the amount of samples the metric is calculated on.
         # If it is not set explicitely, we use the same as the global batch size, but never less than 2 per worker (1 per worker potentially makes some metrics crash)
@@ -440,9 +436,9 @@ def optuna_objective(trial, args, config):
                 batch = npy_data_train.batch(batch_size)
                 
                 #anglepgan #ach
-                batch_energy = npy_energy.batch(batchsize)
-                batch_ang = npy_ang.batch(batchsize)
-                batch_ecal = npy_ecal.batch(batchsize)
+                batch_energy = npy_energy.batch(batch_size)
+                batch_ang = npy_ang.batch(batch_size)
+                batch_ecal = npy_ecal.batch(batch_size)
             
                 # Normalize data (but only if args.data_mean AND args.data_stddev are defined
                 batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
@@ -502,12 +498,12 @@ def optuna_objective(trial, args, config):
                     batch_val = npy_data_validation.batch(batch_size)
                     
                     #anglepgan #ach #ToDo
-                    batch_energy_val = npy_energy_val.batch(batchsize)
-                    batch_ang_val = npy_ang_val.batch(batchsize)
-                    batch_ecal_val = npy_ecal_val.batch(batchsize)
+                    batch_energy_val = npy_energy_validation.batch(batch_size)
+                    batch_ang_val = npy_ang_validation.batch(batch_size)
+                    batch_ecal_val = npy_ecal_validation.batch(batch_size)
                   
                     batch_val = data.normalize_numpy(batch_val, args.data_mean, args.data_stddev, verbose)
-                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val, energy_input : batch_energy_val, ang_input : batch_ang_val} }) #anglepgan #ach #ToDo
+                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val, energy_input : batch_energy_val, ang_input : batch_ang_val} ) #anglepgan #ach #ToDo
                   
                 #print("Completed step")
                 global_step += batch_size * global_size

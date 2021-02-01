@@ -69,14 +69,15 @@ def create_small_summary(disc_loss, gen_loss, gp_loss, g_gradients, g_variables,
         summary_small.append(tf.summary.scalar('max_g_grad_norm', max_g_norm))
         summary_small.append(tf.summary.scalar('max_d_grad_norm', max_d_norm))
 
-            with tf.name_scope('Image_properties/'):
-        summary_small.append(tf.summary.scalar('fake_image_max', tf.math.reduce_max(gen_sample)))	        summary_small.append(tf.summary.scalar('image_min_fake', tf.math.reduce_min(gen_sample)))
+    with tf.name_scope('Image_properties/'):
+        summary_small.append(tf.summary.scalar('fake_image_max', tf.math.reduce_max(gen_sample)))	        
+        summary_small.append(tf.summary.scalar('image_min_fake', tf.math.reduce_min(gen_sample)))
         summary_small.append(tf.summary.scalar('image_max_fake', tf.math.reduce_max(gen_sample)))
 
         summary_small.append(tf.summary.scalar('image_min_real', tf.math.reduce_min(real_image_input[0])))
         summary_small.append(tf.summary.scalar('image_max_real', tf.math.reduce_max(real_image_input[0])))
         
-            with tf.name_scope('Training_properties/'):
+    with tf.name_scope('Training_properties/'):
         summary_small.append(tf.summary.scalar('alpha', alpha))
 
         summary_small.append(tf.summary.scalar('g_lr', g_lr))

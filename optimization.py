@@ -92,10 +92,8 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
             network_size,
             loss_fn,
             gp_weight,
-            energy_input,
-            ang_input,
             loss_weights,  #anglepgan#emmac
-            enery_input,   #anglepgan#emmac
+            energy_input,   #anglepgan#emmac
             ang_input,     #anglepgan#emmac
             noise_stddev
         )
