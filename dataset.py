@@ -158,6 +158,7 @@ class NumpyDataset:
     def __len__(self):
         return len(self.npy_files)
 
+
 # TODO: create init based on filelist (a glob-like object). This way, we can easily split a glob-like object into training/validation/test parts,
 # and create training/validation/test NumpyPathDataset for each of those.
 class NumpyPathDataset:
@@ -172,7 +173,7 @@ class NumpyPathDataset:
 
         self.scratch_dir = os.path.normpath(scratch_dir + npy_dir) if is_correct_phase else npy_dir
         #self._copy_files_to_scratch(scratch_dir, copy_files, is_correct_phase)   #caspar #surfgan #TODO check
-        
+
         #anglepgan#ach
         if copy_files and is_correct_phase:
             os.makedirs(self.scratch_dir, exist_ok=True)
@@ -188,10 +189,15 @@ class NumpyPathDataset:
         self.scratch_files = glob.glob(self.scratch_dir + '/*.npy')
         assert len(self.scratch_files) == len(self.npy_files)
 
+        # Initialize the samplebuffer
+        self._init_samplebuffer()
+
         test_npy_array = np.load(self.scratch_files[0])[np.newaxis, ...]
         self.shape = test_npy_array.shape
         self.dtype = test_npy_array.dtype
         del test_npy_array
+
+        # TODO: Split the dataset into a test and training set (add arguments to __init__ to determine the fractions, then use those in get_training_batch to randomly select samples from the first X% of the dataset)
 
     def _copy_files_to_scratch(self, scratch_dir, copy_files, is_correct_phase):
         if copy_files and is_correct_phase:
@@ -207,7 +213,7 @@ class NumpyPathDataset:
         # Note: the [:] on self.scratch_files is needed to make sure the list gets duplicated - otherwise self.scratch_files will also get shuffled
         self.samplebuffer = self.scratch_files[:]
         random.shuffle(self.samplebuffer)
-        
+
     def __iter__(self):
         for path in self.scratch_files:
             yield path
@@ -218,7 +224,7 @@ class NumpyPathDataset:
     def __len__(self):
         return len(self.scratch_files)
 
-        def split_by_fraction(self, fraction):
+    def split_by_fraction(self, fraction):
         """Split this NumpyPathDataset object into multiple NumpyPathDataset objects, according to provided ratios. E.g. for creating a train, validation and test set.
         Parameters:
             fraction: fraction according to which to split the dataset. E.g. 0.7 will return a one dataset with 70% of the original samples, and another with 30%.
