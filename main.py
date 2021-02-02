@@ -8,7 +8,7 @@ import time
 import random
 from metrics import (calculate_fid_given_batch_volumes, get_swd_for_volumes,get_normalized_root_mse, get_mean_squared_error, get_psnr, get_ssim)
 from dataset import NumpyPathDataset
-from utils import count_parameters, image_grid, parse_tuple, MPMap, log0, lr_update,  get_verbosity, print_study_summary
+from utils import count_parameters, image_grid, parse_tuple, MPMap, log0, get_verbosity, print_study_summary
 from mpi4py import MPI
 import os
 import importlib
