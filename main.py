@@ -8,7 +8,7 @@ import time
 import random
 from metrics import (calculate_fid_given_batch_volumes, get_swd_for_volumes,get_normalized_root_mse, get_mean_squared_error, get_psnr, get_ssim)
 from dataset import NumpyPathDataset
-from utils import count_parameters, image_grid, parse_tuple, MPMap, log0, get_verbosity, print_study_summary
+from utils_old import count_parameters, image_grid, parse_tuple, MPMap, log0, get_verbosity, print_study_summary
 from mpi4py import MPI
 import os
 import importlib
@@ -312,6 +312,10 @@ if __name__ == '__main__':
     parser.add_argument('--use_adasum', default=False, action='store_true')
     parser.add_argument('--ema_beta', type=float, default=0.99)
     parser.add_argument('--noise_stddev', default=None, type=float, required=True, help="Normally distributed noise is added to the inputs before training ('instance noise', see e.g. https://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/). This argument specifies the standard deviation of that normal distribution, and thus the magnitude of that noise. Adding noise that is of the same order as the real noise in your image likely has the best effect.")
+
+    # Loss specific for AnglePGAN - #ach
+    parser.add_argument('--loss_weights', action='store', type=int, default=[3, 25, 0.1], help='loss weights =[gen_weight, aux_weight, ang_weight, ecal_weight, add loss weight]')
+    #parser.add_argument('--loss_weights', action='store', type=int, default=[3, 0.1, 25, 0.1, 0.1], help='loss weights =[gen_weight, aux_weight, ang_weight, ecal_weight, add loss weight]')
 
     # Not sure if these do anything anymore...
     parser.add_argument('--g_annealing', default=1,
