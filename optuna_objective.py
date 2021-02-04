@@ -36,14 +36,20 @@ def optuna_objective(trial, args, config):
     # Note: this means that when restoring from an optuna FrozenTrial, command line parameters take precedence!
     args = optuna_override_undefined(args_copy, trial)
 
-    # Importing modules by name for the generator and discriminator #ach : removing pgan from the path
-    discriminator = importlib.import_module(f'networks.{args.architecture}.discriminator').discriminator    #anglepgan#emmac
-    generator = importlib.import_module(f'networks.{args.architecture}.generator').generator   #anglepgan#emmac
+    # If tuning hyperparameters with intra-trial parallelism, send the trial and args object so that the other workers can call optuna_objective with those as arguments
+    if hyperparam_opt_intra_trial and hvd.rank() == 0:
+        MPI.COMM_WORLD.bcast(trial, root=0)
+        print(f'Worker {hvd.rank()} sending args: {args}')
+        MPI.COMM_WORLD.bcast(args, root=0)
+
+    # Importing modules by name for the generator and discriminator
+    discriminator = importlib.import_module(f'networks.{args.architecture}.discriminator').discriminator
+    generator = importlib.import_module(f'networks.{args.architecture}.generator').generator
 
     # Set verbosity:
     verbose = get_verbosity(args.horovod, args.optuna_distributed)
     if not verbose:
-        tf.get_logger().setLevel(logging.ERROR) # Only errors if rank != 0
+        tf.get_logger().setLevel(logging.ERROR)  # Only errors if rank != 0
 
     # set world size
     if args.horovod:
@@ -61,7 +67,7 @@ def optuna_objective(trial, args, config):
 
     # Number of filters at the base (= 1st convolutional layer of the generator) of the progressive network
     # In subsequent phases, the number of filters will go down as the resolution goes up.
-    base_dim = args.first_conv_nfilters    #TODO check that param is passed, its diff in anglegan
+    base_dim = args.first_conv_nfilters
 
     if verbose:
         #print(f"Start resolution: {start_resolution}")   #anglepgan#ach
@@ -88,7 +94,7 @@ def optuna_objective(trial, args, config):
     npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
 
     # Loop over the different phases (resolutions) of training of a progressive architecture
-    for phase in range(1, get_num_phases(args.start_shape, args.final_shape) + 1):   #TODO check diff num_phases
+    for phase in range(1, get_num_phases(args.start_shape, args.final_shape) + 1):
 
         tf.reset_default_graph()
         
@@ -171,23 +177,14 @@ def optuna_objective(trial, args, config):
         # Get DataLoader
         batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
 
-        #if phase >= args.starting_phase:
-            #ach - keeping the new Caspar code changes as much as possible -> commenting the code 
-            #print("###assert debut :", batch_size, global_size, args.max_global_batch_size)  #anglepgan#ach
-            #assert batch_size * global_size <= args.max_global_batch_size    #CASPAR has this commented out
-        #    if verbose:
-        #        print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
-
-        #anglepgan#ach
-        #current_shape = [batch_size, image_channels, *[size * 2 ** (phase - 1) for size in
-        #                                               base_shape[1:]]]
-        #anglepgan#ach
-        #if verbose:
-        #    print(f'base_shape: {base_shape}, current_shape: {current_shape}')
+        if phase >= args.starting_phase:
+            # assert batch_size * global_size <= args.max_global_batch_size
+            if verbose:
+                print(f"Using local batch size of {batch_size} and global batch size of {batch_size * global_size}")
 
         # Num_metric_samples is the amount of samples the metric is calculated on.
         # If it is not set explicitely, we use the same as the global batch size, but never less than 2 per worker (1 per worker potentially makes some metrics crash)
-        num_metric_samples = get_num_metric_samples(args.num_metric_samples, batch_size, global_size) #TODO check this function
+        num_metric_samples = get_num_metric_samples(args.num_metric_samples, batch_size, global_size)
 
         # Create input tensor
         real_image_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
@@ -219,17 +216,17 @@ def optuna_objective(trial, args, config):
         #TODO - make this customizable through parameter
         optimizer_gen = tf.train.AdamOptimizer(learning_rate=g_lr, beta1=args.beta1, beta2=args.beta2)
         optimizer_disc = tf.train.AdamOptimizer(learning_rate=d_lr, beta1=args.beta1, beta2=args.beta2)
-        #optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=g_lr)
-        #optimizer_disc = tf.train.RMSPropOptimizer(learning_rate=d_lr)
+        # optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=g_lr)
+        # optimizer_disc = tf.train.RMSPropOptimizer(learning_rate=d_lr)
         # optimizer_gen = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
         # optimizer_disc = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
         # optimizer_gen = RAdamOptimizer(learning_rate=g_lr, beta1=args.beta1, beta2=args.beta2)
         # optimizer_disc = RAdamOptimizer(learning_rate=d_lr, beta1=args.beta1, beta2=args.beta2)
 
         intra_phase_step = tf.Variable(0, name='step', dtype=tf.int32)
-        update_intra_phase_step = intra_phase_step.assign_add(batch_size*global_size)
+        update_intra_phase_step = intra_phase_step.assign_add(batch_size * global_size)
 
-        # Turn arguments into constant Tensors - #TODO - check my g=g and d=d fix (diff in caspar's code)
+        # Turn arguments into constant Tensors
         g_lr_max = tf.constant(args.g_lr, tf.float32)
         d_lr_max = tf.constant(args.d_lr, tf.float32)
         #TODO - #anglepgan#ach has rise_niter and decay_niter that is taken out (lines 231-234) I think for optuna?
@@ -263,7 +260,7 @@ def optuna_objective(trial, args, config):
 
         # Alpha ops
         init_alpha = alpha.assign(1)
-        update_alpha = nw.ops.alpha_update(alpha, args.mixing_nimg, args.starting_alpha, batch_size, global_size)   #TODO - check, diff in adel/pgan/main (269-273)
+        update_alpha = nw.ops.alpha_update(alpha, args.mixing_nimg, args.starting_alpha, batch_size, global_size)
         assign_starting_alpha = alpha.assign(args.starting_alpha)
         assign_zero = alpha.assign(0)
         
@@ -281,7 +278,7 @@ def optuna_objective(trial, args, config):
             args.latent_dim,
             alpha,
             phase,
-            get_num_phases(args.start_shape, args.final_shape),    
+            get_num_phases(args.start_shape, args.final_shape),
             base_dim,
             get_base_shape(args.start_shape),
             args.activation,
@@ -349,7 +346,7 @@ def optuna_objective(trial, args, config):
 
         # ------------------------------------------------------------------------------------------#
         # Other ops
-        
+
         init_op = tf.global_variables_initializer()
         #TODO check #Caspar's removal of assign_starting_alpha and assign_zero
         # Probably these alpha ops could be with the other ops above, but... it changes reproducibility of my runs. So for now, I'll leave them here.
@@ -395,12 +392,13 @@ def optuna_objective(trial, args, config):
 
             local_step = 0
             # take_first_snapshot = True
-            
-            #TODO check optuna stuff is working
-            if args.optuna_distributed:
-                print(f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}")
-            else:
-                print(f"Trial: {trial.number}, Parameters: {trial.params}")
+
+            if trial is not None:
+                # Only for inter-trial parallelism: each worker has its own trial, so should report its own parameters. Otherwise, only rank 0 should report
+                if hyperparam_opt_inter_trial:
+                    print(f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}")
+                elif hvd.rank() == 0:
+                    print(f"Trial: {trial.number}, Parameters: {trial.params}")
 
             # ------------------------------------------------------------------------------------------#
             # Training loop for mixing phase
@@ -420,7 +418,7 @@ def optuna_objective(trial, args, config):
                 if not mixing_bool:
                     assert alpha.eval() == 0
 
-                if global_step % args.checkpoint_every_nsteps < (batch_size*global_size) and local_step > 0:
+                if global_step % args.checkpoint_every_nsteps < (batch_size * global_size) and local_step > 0:
                     if args.horovod:
                         if verbose:
                             print("Broadcasting global variables for checkpointing...")
@@ -431,7 +429,7 @@ def optuna_objective(trial, args, config):
                     if verbose:
                         print(f'Writing checkpoint file: model_{phase}_ckpt_{global_step}')
                         saver.save(sess, os.path.join(logdir, f'model_{phase}_ckpt_{global_step}'))
-                
+
                 # Get randomly selected batch
                 batch = npy_data_train.batch(batch_size)
                 
@@ -468,17 +466,17 @@ def optuna_objective(trial, args, config):
                 #     print(f"Worker {hvd.rank()} got batch from {batch_loc} to {batch_loc + batch_size}")
                 # else:
                 #     print(f"got batch from {batch_loc} to {batch_loc + batch_size}")
-                #print("Got a batch!")
+                # print("Got a batch!")
 
-                #sess = tf_debug.LocalCLIDebugWrapperSession(sess, ui_type="readline")
-                #sess = tf_debug.TensorBoardDebugWrapperSession(sess, 'localhost:6789')
-                
+                # sess = tf_debug.LocalCLIDebugWrapperSession(sess, ui_type="readline")
+                # sess = tf_debug.TensorBoardDebugWrapperSession(sess, 'localhost:6789')
+
                 # Measure speed as often as small_summaries, but one iteration later. This avoids timing the summaries themselves.
                 speed_measurement_bool = ((local_step - 1) % args.summary_small_every_nsteps < batch_size)
                 small_summary_bool = (local_step % args.summary_small_every_nsteps < batch_size)
                 large_summary_bool = (local_step % args.summary_large_every_nsteps < batch_size)
                 metrics_summary_bool = (local_step % args.metrics_every_nsteps < batch_size)
-               
+
                 # Run training step, including summaries
                 if large_summary_bool:
                     _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
@@ -522,23 +520,46 @@ def optuna_objective(trial, args, config):
                 if metrics_summary_bool:
                     if args.calc_metrics:
                         # if verbose:
-                            # print('Computing and writing metrics...')
-                        metrics = save_metrics(writer, sess, npy_data, gen_sample, batch_size, global_size, global_step, get_xy_dim(phase, args.start_shape), args.horovod, get_compute_metrics_dict(args), num_metric_samples, args.data_mean, args.data_stddev, verbose)
+                        # print('Computing and writing metrics...')
+                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, args.metrics_batch_size,
+                                               global_size, global_step, get_xy_dim(phase, args.start_shape),
+                                               args.horovod, get_compute_metrics_dict(args), num_metric_samples,
+                                               args.data_mean, args.data_stddev, verbose)
 
                         # Optuna pruning and return value:
                         last_fid = metrics['FID']
-                        if args.optuna_distributed:
-                            print(f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
-                        else:
-                            print(f"Trial: {trial.number}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
-                        trial.report(metrics['FID'], global_step)
-                        if trial.should_prune():
-                            raise optuna.TrialPruned()
+                        if trial is not None:
+                            # Only for inter-trial parallelism: each worker has its own trial, so should report its own parameters. Otherwise, only rank 0 should report
+                            if hyperparam_opt_inter_trial:
+                                print(
+                                    f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
+                            elif hvd.rank() == 0:
+                                print(
+                                    f"Trial: {trial.number}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
+
+                        # If we use intra-trial parallelism, only worker 0 should report and prune, the others should 'just' return. For inter-trial parallelism, each workers should report an prune.
+                        if hyperparam_opt_inter_trial or (hyperparam_opt_intra_trial and (hvd.rank() == 0)):
+                            trial.report(metrics['FID'], global_step)
+                            should_prune = trial.should_prune()
+                            if (args.horovod and (hvd.rank() == 0)):
+                                print(
+                                    "Sending signal to other horovod workers that trial has been pruned and they should return")
+                                MPI.COMM_WORLD.bcast(should_prune, root=0)
+                            if should_prune:
+                                raise optuna.TrialPruned()
+                        elif hyperparam_opt_intra_trial and (hvd.rank() != 0):
+                            should_prune = False
+                            should_prune = MPI.COMM_WORLD.bcast(should_prune, root=0)
+                            if should_prune:
+                                print(
+                                    f"Received signal from rank 0 that trial {trial.number} should be pruned. Returning...")
+                                return last_fid
 
                 if verbose:
                     if large_summary_bool:
                         if not hyperparam_opt_inter_trial:
-                            print('Writing large summary...')                        writer.add_summary(summary_s, global_step)
+                            print('Writing large summary...')
+                        writer.add_summary(summary_s, global_step)
                         writer.add_summary(summary_s_val, global_step)
                         writer.add_summary(summary_l, global_step)
                     elif small_summary_bool:
@@ -550,12 +571,13 @@ def optuna_objective(trial, args, config):
                         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]),
                                            global_step)
                     if args.optuna_use_best_trial or args.optuna_ntrials == 1 or hyperparam_opt_intra_trial or normal_run:
-                        print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss, d_lr_val, g_lr_val, alpha)
-                  
+                        print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss,
+                                                d_lr_val, g_lr_val, alpha)
+
                 # Is only executed once per phase, because the mixing_bool is then flipped to False
                 if mixing_bool and (global_step >= ((phase - args.starting_phase)
-                                   * (args.mixing_nimg + args.stabilizing_nimg)
-                                   + args.mixing_nimg)):
+                                                    * (args.mixing_nimg + args.stabilizing_nimg)
+                                                    + args.mixing_nimg)):
                     mixing_bool = False
                     sess.run(assign_zero)
                     if verbose:
@@ -583,28 +605,46 @@ def optuna_objective(trial, args, config):
                 print(f"Computing final metrics for phase {phase} ...")
                 if args.compute_metrics_test:
                     start_metrics_test = time.time()
-                    metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, args.metrics_batch_size, global_size, global_step, get_xy_dim(phase, args.start_shape), False, get_compute_metrics_dict(args), len(npy_data_test), args.data_mean, args.data_stddev, verbose)
+                    metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, args.metrics_batch_size,
+                                                global_size, global_step, get_xy_dim(phase, args.start_shape), False,
+                                                get_compute_metrics_dict(args), len(npy_data_test), args.data_mean,
+                                                args.data_stddev, verbose)
                     end_metrics_test = time.time()
                     print(f"Computing metrics on test set took {end_metrics_test - start_metrics_test} seconds")
                     print("Test dataset metrics:")
                     print(metrics_test)
                 if args.compute_metrics_validation:
                     start_metrics_val = time.time()
-                    metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, args.metrics_batch_size, global_size, global_step, get_xy_dim(phase, args.start_shape), False, get_compute_metrics_dict(args), len(npy_data_validation), args.data_mean, args.data_stddev, verbose)
+                    metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, args.metrics_batch_size,
+                                               global_size, global_step, get_xy_dim(phase, args.start_shape), False,
+                                               get_compute_metrics_dict(args), len(npy_data_validation), args.data_mean,
+                                               args.data_stddev, verbose)
                     end_metrics_val = time.time()
                     print(f"Computing metrics on validation set took {end_metrics_val - start_metrics_val} seconds")
                     print("Validation dataset metrics:")
                     print(metrics_val)
                     # Overwrite the last fid
-                    last_fid = metrics['FID']
+                    last_fid = metrics_val['FID']
                 if args.compute_metrics_train:
                     start_metrics_train = time.time()
-                    metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, args.metrics_batch_size, global_size, global_step, get_xy_dim(phase, args.start_shape), False, get_compute_metrics_dict(args), len(npy_data_train), args.data_mean, args.data_stddev, verbose)
+                    metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, args.metrics_batch_size,
+                                                 global_size, global_step, get_xy_dim(phase, args.start_shape), False,
+                                                 get_compute_metrics_dict(args), len(npy_data_train), args.data_mean,
+                                                 args.data_stddev, verbose)
                     end_metrics_train = time.time()
                     print(f"Computing metrics on training set took {end_metrics_train - start_metrics_train} seconds")
                     print("Training dataset metrics:")
                     print(metrics_train)
-                  
+
+                if trial is not None:
+                    # Only for inter-trial parallelism: each worker has its own trial, so should report its own parameters. Otherwise, only rank 0 should report
+                    if hyperparam_opt_inter_trial:
+                        print(
+                            f"Trial: {trial.number}, Worker: {hvd.rank()}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
+                    elif hvd.rank() == 0:
+                        print(
+                            f"Trial: {trial.number}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
+
             if args.ending_phase:
                 if phase == args.ending_phase:
                     print("Reached final phase, breaking.")
