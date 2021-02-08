@@ -16,7 +16,7 @@ def add_to_metric_summary(metric_name, metric_value, summary_metrics, sess):
     sess.run([init_metric, update_metric])
     summary_metrics.append(tf.summary.scalar(metric_name, metric_tensor))
 
-def save_metrics(writer, sess, npy_data, gen_sample, batch_size, global_size, global_step, imagesize_xy, horovod, compute_metrics, num_metric_samples, data_mean, data_stddev, verbose):
+def save_metrics(writer, sess, npy_data, gen_sample, batch_energy, batch_ang, batch_size, global_size, global_step, imagesize_xy, horovod, compute_metrics, num_metric_samples, data_mean, data_stddev, verbose):
     """
     Saves metrics to a tf.summary
     Parameters:
@@ -67,7 +67,7 @@ def save_metrics(writer, sess, npy_data, gen_sample, batch_size, global_size, gl
     # I'm guessing we only calculate swds and ssims for larger images because they don't make sense on too small images...
     compute_metrics['compute_swds']: bool = (imagesize_xy >= 16 and compute_metrics['compute_swds'])
     compute_metrics['compute_ssims']: bool = (min(npy_data.shape[1:]) >= 16 and compute_metrics['compute_ssims'])
-    
+
     fids_local = []
     swds_local = []
     psnrs_local = []
@@ -85,11 +85,11 @@ def save_metrics(writer, sess, npy_data, gen_sample, batch_size, global_size, gl
         real_batch = npy_data.batch(batch_size)
         real_batch = data.normalize_numpy(real_batch, data_mean, data_stddev, verbose)
         fake_batch = []
-        # Fake images are always generated with the batch size used for training
-        # Here, we loop often enough to make sure we have enough samples for the batch size that we want to use for metric computation
-        fake_batch = sess.run(gen_sample).astype(np.float32)
+        # Fake images are always generated with the batch size used for training Here, we loop often enough to make
+        # sure we have enough samples for the batch size that we want to use for metric computation
+        fake_batch = sess.run(gen_sample, feed_dict={'energy_input:0': batch_energy, 'ang_input:0': batch_ang}).astype(np.float32)
         while fake_batch.shape[0] < batch_size:
-            fake_batch = np.concatenate((fake_batch, sess.run(gen_sample).astype(np.float32)))
+            fake_batch = np.concatenate((fake_batch, sess.run(gen_sample, feed_dict={'energy_input:0': batch_energy, 'ang_input:0': batch_ang}).astype(np.float32)))
 
         # Finally, since len(fake_batch) may now be larger than batch_size we discard any excess generated images:
         fake_batch = fake_batch[0:batch_size, ...]
@@ -138,7 +138,7 @@ def save_metrics(writer, sess, npy_data, gen_sample, batch_size, global_size, gl
             end = time.time()
             if report_timings:
                 print("mses took %s" % (end-start))
-            
+
         if compute_metrics['compute_nrmses']:
             start = time.time()
             nrmse = get_normalized_root_mse(real_batch, fake_batch)
