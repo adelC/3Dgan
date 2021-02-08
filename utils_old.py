@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import array_ops
 import ast
-from multiprocessing imporprint_study_summaryt Pool
+from multiprocessing import Pool
 import os
 import horovod.tensorflow as hvd
 
