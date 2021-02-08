@@ -23,10 +23,16 @@ import optimization as opt
 import summary
 
 def optuna_objective(trial, args, config):
+    # We support several types of runs (see main.py)
+    run_from_best_trial = (args.optuna_use_best_trial and (args.optuna_storage is not None))
+    hyperparam_opt_inter_trial = args.optuna_distributed and not run_from_best_trial
+    hyperparam_opt_intra_trial = (args.optuna_storage is not None) and (
+                args.optuna_study_name is not None) and not hyperparam_opt_inter_trial
+    normal_run = (not run_from_best_trial) and (not hyperparam_opt_inter_trial) and (not hyperparam_opt_intra_trial)
 
     # Store the last fid so that it can be returned to optuna
     last_fid = None
-    
+
     # Preserve original arguments by creating a deepcopy of args, and call optuna_override_undefined on that.
     # Otherwise, when running multiple trials, the second trial will always get the arguments from the first trial, rather than calling new suggest_*'s
     args_copy = copy.deepcopy(args)
@@ -196,8 +202,8 @@ def optuna_objective(trial, args, config):
         #anglepgan #ach
         energy_shape = [batch_size, 1]
         ang_shape = [batch_size, 1]
-        energy_input = tf.placeholder(shape=energy_shape, dtype=tf.float32)
-        ang_input = tf.placeholder(shape=ang_shape, dtype=tf.float32)
+        energy_input = tf.placeholder(shape=energy_shape, dtype=tf.float32, name="energy_input")
+        ang_input = tf.placeholder(shape=ang_shape, dtype=tf.float32, name="ang_input")
         #anglepgan #ach
         
         real_label = None
@@ -521,7 +527,7 @@ def optuna_objective(trial, args, config):
                     if args.calc_metrics:
                         # if verbose:
                         # print('Computing and writing metrics...')
-                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, args.metrics_batch_size,
+                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, batch_energy_val, batch_ang_val, args.metrics_batch_size,
                                                global_size, global_step, get_xy_dim(phase, args.start_shape),
                                                args.horovod, get_compute_metrics_dict(args), num_metric_samples,
                                                args.data_mean, args.data_stddev, verbose)
@@ -605,7 +611,7 @@ def optuna_objective(trial, args, config):
                 print(f"Computing final metrics for phase {phase} ...")
                 if args.compute_metrics_test:
                     start_metrics_test = time.time()
-                    metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, args.metrics_batch_size,
+                    metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, batch_energy, batch_ang, args.metrics_batch_size,
                                                 global_size, global_step, get_xy_dim(phase, args.start_shape), False,
                                                 get_compute_metrics_dict(args), len(npy_data_test), args.data_mean,
                                                 args.data_stddev, verbose)
@@ -615,7 +621,7 @@ def optuna_objective(trial, args, config):
                     print(metrics_test)
                 if args.compute_metrics_validation:
                     start_metrics_val = time.time()
-                    metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, args.metrics_batch_size,
+                    metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, batch_energy, batch_ang, args.metrics_batch_size,
                                                global_size, global_step, get_xy_dim(phase, args.start_shape), False,
                                                get_compute_metrics_dict(args), len(npy_data_validation), args.data_mean,
                                                args.data_stddev, verbose)
@@ -627,7 +633,7 @@ def optuna_objective(trial, args, config):
                     last_fid = metrics_val['FID']
                 if args.compute_metrics_train:
                     start_metrics_train = time.time()
-                    metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, args.metrics_batch_size,
+                    metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, batch_energy, batch_ang, args.metrics_batch_size,
                                                  global_size, global_step, get_xy_dim(phase, args.start_shape), False,
                                                  get_compute_metrics_dict(args), len(npy_data_train), args.data_mean,
                                                  args.data_stddev, verbose)
