@@ -8,7 +8,8 @@ import time
 import random
 from metrics import (calculate_fid_given_batch_volumes, get_swd_for_volumes,get_normalized_root_mse, get_mean_squared_error, get_psnr, get_ssim)
 from dataset import NumpyPathDataset
-from utils_old import count_parameters, image_grid, parse_tuple, MPMap, log0, get_verbosity, print_study_summary
+from utils_old import count_parameters, image_grid, parse_tuple, MPMap, log0
+from utils import get_verbosity, print_study_summary
 from mpi4py import MPI
 import os
 import importlib
@@ -254,7 +255,7 @@ def main(args, config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-        parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
     parser.add_argument('architecture', type=str)
     parser.add_argument('dataset_path', type=str)
     parser.add_argument('--start_shape', type=str, default=None, required=True, help="Shape of the data at phase 0, '(c, z, y, x)', e.g. '(1, 5, 16, 16)'")
