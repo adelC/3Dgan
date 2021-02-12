@@ -235,6 +235,7 @@ def optuna_objective(trial, args, config):
         assign_starting_alpha = alpha.assign(args.starting_alpha)
         assign_zero = alpha.assign(0)
 
+        #Caspar changes structure and uses new helper functions like get_num_phases #TODO check this runs smoothly
         # Performs a forward pass, computes gradients, clips them (if desired), and then applies them.
         # Supports simultaneous forward pass of generator and discriminator, or alternatingly (discriminator first)
         train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm = opt.optimize_step(
@@ -307,6 +308,7 @@ def optuna_objective(trial, args, config):
         # Other ops
 
         init_op = tf.global_variables_initializer()
+        #TODO check #Caspar's removal of assign_starting_alpha and assign_zero
         # Probably these alpha ops could be with the other ops above, but... it changes reproducibility of my runs. So for now, I'll leave them here.
 
         broadcast = hvd.broadcast_global_variables(0)
@@ -317,6 +319,7 @@ def optuna_objective(trial, args, config):
             # sess.graph.finalize()
             sess.run(init_op)
 
+            #Caspar cut this section down a lot #TODO check that it runs smoothly (adel/pgan/main l484-504)
             # Do variables need to be restored? (either from the previous phase, or from a previous run)
             if (phase > args.starting_phase) or (args.continue_path and phase == args.starting_phase):
                 restore_variables(sess, phase, args.starting_phase, logdir, args.continue_path, var_list, verbose)
@@ -360,6 +363,7 @@ def optuna_objective(trial, args, config):
             # ------------------------------------------------------------------------------------------#
             # Training loop for mixing phase
 
+            #Caspar added #TODO check it works
             # Do we start with a mixing phase? (normally we do, unless we resume e.g. from a point in the stabilization phase)
             if args.mixing_nimg > 0:
                 mixing_bool = True
@@ -410,26 +414,24 @@ def optuna_objective(trial, args, config):
                 # sess = tf_debug.TensorBoardDebugWrapperSession(sess, 'localhost:6789')
 
                 # Measure speed as often as small_summaries, but one iteration later. This avoids timing the summaries themselves.
-                speed_measurement_bool = ((local_step - batch_size) % args.summary_small_every_nsteps < batch_size)
+                speed_measurement_bool = ((local_step - 1) % args.summary_small_every_nsteps < batch_size)
                 small_summary_bool = (local_step % args.summary_small_every_nsteps < batch_size)
                 large_summary_bool = (local_step % args.summary_large_every_nsteps < batch_size)
                 metrics_summary_bool = (local_step % args.metrics_every_nsteps < batch_size)
 
                 # Run training step, including summaries
                 if large_summary_bool:
-                    _, _, summary_props, summary_s, summary_l, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, summary_training_props, summary_small_with_gradients, summary_large,
-                         disc_loss, gen_loss], feed_dict={real_image_input: batch})
+                    _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
+                         [train_gen, train_disc, summary_small, summary_large,
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
                 elif small_summary_bool:
-                    _, _, summary_props, summary_s, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, summary_training_props, summary_small_with_gradients,
-                         disc_loss, gen_loss], feed_dict={real_image_input: batch})
+                    _, _, summary_s, d_loss, g_loss = sess.run(
+                         [train_gen, train_disc, summary_small,
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
                 else:
                     _, _, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, disc_loss, gen_loss],
-                        feed_dict={real_image_input: batch})
-                # Update EMA right after training step
-                sess.run(ema_op)
+                         [train_gen, train_disc, disc_loss, gen_loss],
+                         feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang})
 
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
