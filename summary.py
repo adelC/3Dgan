@@ -56,7 +56,9 @@ def create_small_summary(disc_loss, gen_loss, gp_loss, gen_sample, real_image_in
 
     return summary_small
 
-def create_small_summary(disc_loss, gen_loss, gp_loss, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm, gen_sample, real_image_input, energy_input, ang_input,  alpha, g_lr, d_lr):
+
+def create_small_summary_with_gradients(disc_loss, gen_loss, gp_loss, g_gradients, g_variables, d_gradients,
+                                        d_variables, max_g_norm, max_d_norm, gen_sample, real_image_input, suffix=''):
     """Creates a summary op for small summaries, i.e. the ones that don't consume much disk space. These can be made frequently.
     Parameters:
         disc_loss: discriminator loss
@@ -70,11 +72,7 @@ def create_small_summary(disc_loss, gen_loss, gp_loss, g_gradients, g_variables,
         max_d_norm: the maximum norm of the discriminator gradients
         gen_sample: (batch of) generated samples
         real_image_input: input tensor containing a batch of real images
-        energy_input:
-        ang_input: 
-        alpha: mixing factor alpha
-        g_lr: generator learning rate
-        d_lr: discriminator learning rate
+        suffix: (optional) suffix for the summary parameters. Can e.g. be _val or _EMA to indicate the summaries were compute on the validation dataset, or using the EMA model parameters.
     Returns:
         summary_small: a single op that will update all small summaries
     """
