@@ -173,8 +173,9 @@ class NumpyPathDataset:
 
         self.scratch_dir = os.path.normpath(scratch_dir + npy_dir) if is_correct_phase else npy_dir
         #self._copy_files_to_scratch(scratch_dir, copy_files, is_correct_phase)   #caspar #surfgan #TODO check
-
-        #anglepgan#ach
+        print("#ACH  copy files :", copy_files)
+        
+	#anglepgan#ach
         if copy_files and is_correct_phase:
             os.makedirs(self.scratch_dir, exist_ok=True)
             print("Copying files to scratch...")

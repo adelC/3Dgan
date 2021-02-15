@@ -98,12 +98,12 @@ def optuna_objective(trial, args, config):
     
     
     #anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent 
-    npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
+    npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
     #anglepgan#ach
-    npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
+    npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
         
     #anglepgan#ach
-    npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=hvd.local_rank == 0, is_correct_phase=True)
+    npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
 
     # Loop over the different phases (resolutions) of training of a progressive architecture
     for phase in range(1, get_num_phases(args.start_shape, args.final_shape) + 1):
