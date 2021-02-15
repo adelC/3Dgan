@@ -178,7 +178,7 @@ def get_xy_dim(phase, start_shape):
 def get_numpy_dataset(phase, starting_phase, start_shape, dataset_path, scratch_path, verbose):
     """Convenience function that wraps around the initialization of a NumpyPathDataset. Resolution of the dataset to be read in is inferred from the phase and the starting shape"""
     size = get_xy_dim(phase, start_shape)
-
+    print("calculated size #ACH :::: ", size)
     data_path = os.path.join(dataset_path, f'{size}x{size}/')
     if verbose:
         print(f'Phase {phase}: reading data from dir {data_path}')

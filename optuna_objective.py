@@ -394,9 +394,9 @@ def optuna_objective(trial, args, config):
                 batch = npy_data_train.batch(batch_size)
                 
                 #anglepgan #ach
-                batch_energy = npy_energy.batch(batch_size)
-                batch_ang = npy_ang.batch(batch_size)
-                batch_ecal = npy_ecal.batch(batch_size)
+                batch_energy_train = npy_energy_train.batch(batch_size)
+                batch_ang_train = npy_ang_train.batch(batch_size)
+                batch_ecal_train = npy_ecal_train.batch(batch_size)
             
                 # Normalize data (but only if args.data_mean AND args.data_stddev are defined
                 batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
@@ -423,15 +423,20 @@ def optuna_objective(trial, args, config):
                 if large_summary_bool:
                     _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small, summary_large,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                              energy_input : batch_energy_train, ang_input :
+                              batch_ang_train}) #anglepgan #ach #ToDo
                 elif small_summary_bool:
                     _, _, summary_s, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, summary_small,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang}) #anglepgan #ach #ToDo
+                          disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                              energy_input : batch_energy_train, ang_input :
+                              batch_ang_train}) #anglepgan #ach #ToDo
                 else:
                     _, _, d_loss, g_loss = sess.run(
                          [train_gen, train_disc, disc_loss, gen_loss],
-                         feed_dict={real_image_input: batch, energy_input : batch_energy, ang_input : batch_ang})
+                         feed_dict={real_image_input: batch, energy_input :
+                             batch_energy_train, ang_input : batch_ang_train})
 
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
