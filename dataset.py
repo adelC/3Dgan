@@ -13,6 +13,7 @@ import random
 batch = np.stack
 from mpi4py import MPI
 
+
 def stdnormal_to_8bit_numpy(normalized_input, verbose):
     """Maps standard normalized channels (mean=0, stddev=1) to 8-bit channels ([0,255]).
     Mapping is linear, with the mean (0) being mapped to 128, mean - 2*SD (i.e. -2) being mapped to 0, and mean +2*SD(i.e. 2) being mapped to 256.
@@ -25,6 +26,7 @@ def stdnormal_to_8bit_numpy(normalized_input, verbose):
     """
     image_8bit = np.clip((64 * normalized_input + 128), 0, 255)
     return image_8bit.astype(int)
+
 
 def normalize(unnormalized_input, mean, stddev, verbose):
     """(Standard) Normalizes the input data as part of the tensorflow graph. Normalization is done by subtracting the mean, then dividing by the standard deviation.
@@ -51,6 +53,7 @@ def normalize(unnormalized_input, mean, stddev, verbose):
             normalized_input = tf.math.divide(x, stddev_tensor)
             return normalized_input
 
+
 def invert_normalize(normalized_input, mean, stddev, verbose):
     """Invert normalization as done by normalize. Operations to undo normalization become part of the tensorflow graph. Normalization is done by subtracting the mean, then dividing by the standard deviation.
     Parameters:
@@ -76,6 +79,7 @@ def invert_normalize(normalized_input, mean, stddev, verbose):
             unnormalized_input = tf.math.add(x, mean_tensor)
             return unnormalized_input
 
+
 def normalize_numpy(unnormalized_input, mean, stddev, verbose):
     """Numpy equivalent of Normalize. Performs standard normalization on the input by subtracting the mean, then dividing by the standard devation.
     Parameters:
@@ -97,6 +101,7 @@ def normalize_numpy(unnormalized_input, mean, stddev, verbose):
         normalized_input = (unnormalized_input - mean) / stddev
         return normalized_input
 
+
 def invert_normalize_numpy(normalized_input, mean, stddev, verbose):
     """Invert the numpy normalization that is performed by normalize_numpy().
     Parameters:
@@ -117,6 +122,7 @@ def invert_normalize_numpy(normalized_input, mean, stddev, verbose):
     else:
         unnormalized_input = (normalized_input * stddev) + mean
         return unnormalized_input
+
 
 class NumpyDataset:
     def __init__(self, npy_dir, scratch_dir, copy_files, is_correct_phase):
@@ -172,17 +178,7 @@ class NumpyPathDataset:
                 scratch_dir = scratch_dir[:-1]
 
         self.scratch_dir = os.path.normpath(scratch_dir + npy_dir) if is_correct_phase else npy_dir
-        #self._copy_files_to_scratch(scratch_dir, copy_files, is_correct_phase)   #caspar #surfgan #TODO check
-        print("#ACH  copy files :", copy_files)
-        
-	#anglepgan#ach
-        if copy_files and is_correct_phase:
-            os.makedirs(self.scratch_dir, exist_ok=True)
-            print("Copying files to scratch...")
-            for f in self.npy_files:
-                # os.path.isdir(self.scratch_dir)
-                if not os.path.isfile(os.path.normpath(scratch_dir + f)):
-                    shutil.copy(f, os.path.normpath(scratch_dir + f))
+        self._copy_files_to_scratch(scratch_dir, copy_files, is_correct_phase)
 
         while len(glob.glob(self.scratch_dir + '/*.npy')) < len(self.npy_files):
             time.sleep(1)
@@ -233,14 +229,14 @@ class NumpyPathDataset:
             dataset1, dataset2: two NumpyPathDataset objects
         """
 
-        nsamples_dataset1 = int( np.round(fraction*len(self.scratch_files)) + 1e-5)
+        nsamples_dataset1 = int(np.round(fraction * len(self.scratch_files)) + 1e-5)
         nsamples_dataset2 = len(self.scratch_files)
 
         # If the number of computed samples for either dataset isn't at least 1, something most likely went wrong
         assert nsamples_dataset1 > 0 and nsamples_dataset2 > 0
 
         return self.split_by_index(nsamples_dataset1)
-    
+
     def split_by_index(self, index):
         """Split this NumpyPathDataset object into multiple NumpyPathDataset objects, according to provided index. E.g. for creating a train, validation and test set.
         Parameters:
@@ -253,7 +249,7 @@ class NumpyPathDataset:
 
         dataset1.scratch_files = self.scratch_files[0:index]
         dataset2.scratch_files = self.scratch_files[index:]
-    
+
         dataset1.npy_files = self.npy_files[0:index]
         dataset2.npy_files = self.npy_files[index:]
 
@@ -261,7 +257,7 @@ class NumpyPathDataset:
         dataset2._init_samplebuffer()
 
         return dataset1, dataset2
-  
+
     def _load_batch_from_filelist(self, batch_paths):
         """Takes a list of numpy files, loads the numpy files, stacks them, and inserts an extra color channel"""
 
@@ -272,7 +268,7 @@ class NumpyPathDataset:
 
         return batch
 
-    def batch(self, batch_size, auto_repeat = True, verbose=False):
+    def batch(self, batch_size, auto_repeat=True, verbose=False):
         """Returns a batch of numpy arrays from the sample buffer.
         Parameters:
             batch_size: size of the batch that should be returned
@@ -293,14 +289,13 @@ class NumpyPathDataset:
             # First part of the samplebuffer becomes the batch, the rest becomes the new samplebuffer
             batch_paths = self.samplebuffer[0:batch_size]
             self.samplebuffer = self.samplebuffer[batch_size:]
-        
+
         if verbose:
             print("Got batch:")
             for element in batch_paths:
                 print(element)
 
         return self._load_batch_from_filelist(batch_paths)
-
 
     def batch_mpi(self, batch_size, auto_repeat=True, verbose=False):
         """Returns a batch of numpy arrays from the sample buffer of rank 0.
@@ -353,7 +348,6 @@ class NumpyPathDataset:
 
         return self._load_batch_from_filelist(batch_paths)
 
-
     def repeat(self):
         """Repeat the dataset. Will be called internally once the dataset runs out of samples if auto_repeat is set."""
         # Note: the [:] on self.scratch_files is needed to make sure the list gets duplicated - otherwise self.scratch_files will also get shuffled
@@ -372,12 +366,12 @@ if __name__ == "__main__":
     import os
     import numpy as np
 
-    a=np.zeros([5, 16, 16])
-    
+    a = np.zeros([5, 16, 16])
+
     scratch = os.path.join(os.getenv('TMPDIR'), os.getenv('USER'))
     savepath = os.path.join(scratch, 'datadir/')
 
-    os.makedirs(savepath, exist_ok = True)
+    os.makedirs(savepath, exist_ok=True)
 
     # Create 10 dummy files
     for i in range(10):
@@ -406,5 +400,3 @@ if __name__ == "__main__":
         npy_data = NumpyPathDataset(savepath, scratch, True, True)
         npy_data.batch(7, True, True)
         npy_data.batch(7, True, True)
-
-
