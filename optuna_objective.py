@@ -421,22 +421,25 @@ def optuna_objective(trial, args, config):
 
                 # Run training step, including summaries
                 if large_summary_bool:
-                    _, _, summary_s, summary_l, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, summary_small, summary_large,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                    _, _, summary_props, summary_s, summary_l, d_loss, g_loss = sess.run(
+                        [train_gen, train_disc, summary_training_props, summary_small_with_gradients, summary_large,
+                         disc_loss, gen_loss], feed_dict={real_image_input: batch,
                               energy_input : batch_energy_train, ang_input :
-                              batch_ang_train}) #anglepgan #ach #ToDo
+                              batch_ang_train})
                 elif small_summary_bool:
-                    _, _, summary_s, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, summary_small,
-                          disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                    _, _, summary_props, summary_s, d_loss, g_loss = sess.run(
+                        [train_gen, train_disc, summary_training_props, summary_small_with_gradients,
+                         disc_loss, gen_loss], feed_dict={real_image_input: batch,
                               energy_input : batch_energy_train, ang_input :
-                              batch_ang_train}) #anglepgan #ach #ToDo
+                              batch_ang_train})
                 else:
                     _, _, d_loss, g_loss = sess.run(
-                         [train_gen, train_disc, disc_loss, gen_loss],
-                         feed_dict={real_image_input: batch, energy_input :
-                             batch_energy_train, ang_input : batch_ang_train})
+                        [train_gen, train_disc, disc_loss, gen_loss],
+                        feed_dict={real_image_input: batch, energy_input:
+                            batch_energy_train, ang_input: batch_ang_train})
+
+                # Update EMA right after training step
+                sess.run(ema_op)
 
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
