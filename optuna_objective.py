@@ -452,12 +452,18 @@ def optuna_objective(trial, args, config):
                   
                     batch_val = data.normalize_numpy(batch_val, args.data_mean, args.data_stddev, verbose)
                     # Compute validation loss on training weights (noisy)
-                    summary_s_val = sess.run(summary_small_validation, feed_dict={real_image_input: batch_val})
+                    summary_s_val = sess.run(summary_small_validation,
+                            feed_dict={real_image_input: batch_val, energy_input :
+                                batch_energy_val, ang_input : batch_ang_val})
                     # Compute train loss on ema weights (less noisy)
                     sess.run(assign_ema_weights)  # Takes only ~ 2 ms
-                    summary_s_val_ema = sess.run(summary_small_EMA, feed_dict={real_image_input: batch})
+                    summary_s_val_ema = sess.run(summary_small_EMA,
+                            feed_dict={real_image_input: batch, energy_input:
+                            batch_energy_train, ang_input: batch_ang_train})
                     if large_summary_bool:
-                        summary_l_ema = sess.run(summary_large_EMA, feed_dict={real_image_input: batch})
+                        summary_l_ema = sess.run(summary_large_EMA,
+                                feed_dict={real_image_input: batch, energy_input:
+                            batch_energy_train, ang_input: batch_ang_train})
                     sess.run(restore_original_weights)
 
                 # print("Completed step")
