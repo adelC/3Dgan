@@ -9,6 +9,7 @@ import itertools
 import psutil
 import copy
 import random
+import subprocess
 
 batch = np.stack
 from mpi4py import MPI
@@ -204,7 +205,8 @@ class NumpyPathDataset:
             for f in self.npy_files:
                 # os.path.isdir(self.scratch_dir)
                 if not os.path.isfile(os.path.normpath(scratch_dir + f)):
-                    shutil.copy(f, os.path.normpath(scratch_dir + f))
+                    #shutil.copy(f, os.path.normpath(scratch_dir + f))
+                    subprocess.call(["rsync", "--ignore-existing", f, scratch_dir])
 
     def _init_samplebuffer(self):
         # Note: the [:] on self.scratch_files is needed to make sure the list gets duplicated - otherwise self.scratch_files will also get shuffled
