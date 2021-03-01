@@ -297,4 +297,4 @@ def forward_simultaneous(generator,
     else:
         raise ValueError(f"Unknown loss function: {loss_fn}")
 
-    return gen_loss, disc_loss, gp_loss, gen_sample
+    return gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss

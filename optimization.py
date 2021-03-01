@@ -69,6 +69,8 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
         disc_loss: discriminator loss
         gp_loss: gradient penalty component of the loss
         gen_sample: generator samples on which the loss is computed
+        ang_los :
+        ecal_loss :
         g_gradients: generator gradients
         g_variables: generator variables (names)
         d_gradients: discriminator gradients
@@ -77,7 +79,7 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
 
     # Perform forward steps of discriminator and generator simultaneously
     if optim_strategy == 'simultaneous':
-        gen_loss, disc_loss, gp_loss, gen_sample = forward_simultaneous(
+        gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss = forward_simultaneous(
             generator,
             discriminator,
             real_image_input,
@@ -160,7 +162,7 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
     else:
         raise ValueError("Unknown optim strategy ", optim_strategy)
 
-    return train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm
+    return train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm
 
     # Op to update the learning rate according to a schedule
 def lr_update(lr, intra_phase_step, steps_per_phase, lr_max, lr_increase, lr_decrease, lr_rise_niter, lr_decay_niter):

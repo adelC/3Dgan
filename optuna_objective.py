@@ -238,7 +238,7 @@ def optuna_objective(trial, args, config):
         #Caspar changes structure and uses new helper functions like get_num_phases #TODO check this runs smoothly
         # Performs a forward pass, computes gradients, clips them (if desired), and then applies them.
         # Supports simultaneous forward pass of generator and discriminator, or alternatingly (discriminator first)
-        train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm = opt.optimize_step(
+        train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm = opt.optimize_step(
             optimizer_gen,
             optimizer_disc,
             generator,
@@ -421,20 +421,20 @@ def optuna_objective(trial, args, config):
 
                 # Run training step, including summaries
                 if large_summary_bool:
-                    _, _, summary_props, summary_s, summary_l, d_loss, g_loss = sess.run(
+                    _, _, summary_props, summary_s, summary_l, d_loss, g_loss, a_loss, e_loss = sess.run(
                         [train_gen, train_disc, summary_training_props, summary_small_with_gradients, summary_large,
-                         disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                         disc_loss, gen_loss, ang_loss, ecal_loss], feed_dict={real_image_input: batch,
                               energy_input : batch_energy_train, ang_input :
                               batch_ang_train})
                 elif small_summary_bool:
-                    _, _, summary_props, summary_s, d_loss, g_loss = sess.run(
+                    _, _, summary_props, summary_s, d_loss, g_loss, a_loss, e_loss = sess.run(
                         [train_gen, train_disc, summary_training_props, summary_small_with_gradients,
-                         disc_loss, gen_loss], feed_dict={real_image_input: batch,
+                         disc_loss, gen_loss, ang_loss, ecal_loss], feed_dict={real_image_input: batch,
                               energy_input : batch_energy_train, ang_input :
                               batch_ang_train})
                 else:
-                    _, _, d_loss, g_loss = sess.run(
-                        [train_gen, train_disc, disc_loss, gen_loss],
+                    _, _, d_loss, g_loss, a_loss, e_loss = sess.run(
+                        [train_gen, train_disc, disc_loss, gen_loss, ang_loss, ecal_loss],
                         feed_dict={real_image_input: batch, energy_input:
                             batch_energy_train, ang_input: batch_ang_train})
 
@@ -543,8 +543,8 @@ def optuna_objective(trial, args, config):
                         writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='img_s', simple_value=img_s)]),
                                            global_step)
                     if args.optuna_use_best_trial or args.optuna_ntrials == 1 or hyperparam_opt_intra_trial or normal_run:
-                        print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss,
-                                                d_lr_val, g_lr_val, alpha)
+                        print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss, a_loss,
+                                                e_loss, d_lr_val, g_lr_val, alpha)
 
                 # Is only executed once per phase, because the mixing_bool is then flipped to False
                 if mixing_bool and (global_step >= ((phase - args.starting_phase)

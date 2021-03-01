@@ -38,7 +38,7 @@ def dump_weight_for_debugging(sess):
     print(f"generator/generator_in/dense/weight:0: {sess.run(var)[0, 0]}")
 
 
-def print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss, d_lr_val, g_lr_val, alpha):
+def print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_loss, g_loss, a_loss, e_loss, d_lr_val, g_lr_val, alpha):
     """Print some summary statistics to stdout.
     Parameters:
         global_step: global step counter. Counts how many images have been seen by all workers together.
@@ -60,6 +60,8 @@ def print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_lo
           f"img/s/worker {local_img_s:.3f} \t"
           f"d_loss {d_loss:.4f} \t "
           f"g_loss {g_loss:.4f} \t "
+           f"d_loss {a_loss:.4f} \t "
+          f"g_loss {e_loss:.4f} \t "
           f"d_lr {d_lr_val:.5f} \t"
           f"g_lr {g_lr_val:.5f} \t"
           # f"memory {memory_percentage:.4f} % \t"
@@ -198,7 +200,7 @@ def get_num_phases(start_shape, final_shape):
     start_shape = parse_tuple(start_shape)
     start_resolution = start_shape[-1]
     final_shape = parse_tuple(final_shape)
-    final_resolution = final_shape[-1]
+    final_resol:qution = final_shape[-1]
     return int(np.log2(final_resolution / start_resolution))
 
 
