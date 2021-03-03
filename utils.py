@@ -200,7 +200,7 @@ def get_num_phases(start_shape, final_shape):
     start_shape = parse_tuple(start_shape)
     start_resolution = start_shape[-1]
     final_shape = parse_tuple(final_shape)
-    final_resol:qution = final_shape[-1]
+    final_resolution = final_shape[-1]
     return int(np.log2(final_resolution / start_resolution))
 
 
