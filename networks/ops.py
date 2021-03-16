@@ -159,6 +159,8 @@ def act(x, activation, param=None):
         return leaky_relu(x, alpha_lr=param)
     elif activation == 'linear':
         return x
+    elif activation == 'relu':
+        return x #TODO - what to put here ?
     else:
         raise ValueError(f"Unknown activation {activation}")
 
@@ -210,8 +212,11 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
     return filters
 
 
-def to_rgb(x, channels=1):
-    return apply_bias(conv3d(x, channels, (1, 1, 1), activation='linear'))
+def to_rgb(x, channels=1, activation='linear'):
+    x = conv3d(x, channels, (1, 1, 1), activation)
+    x = apply_bias(x)
+    x = act(x, activation, param=param)
+    return x
 
 
 def from_rgb(x, filters_out, activation, param=None):
