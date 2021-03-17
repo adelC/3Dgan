@@ -152,6 +152,25 @@ def leaky_relu(x, alpha_lr=0.2):
 
         return func(x)
 
+    
+# to address the negative values, try relu in the last layer   
+def relu(x, alpha_lr=0.2):
+    with tf.variable_scope('relu'):
+        alpha_lr = tf.constant(alpha_lr, dtype=x.dtype, name='alpha_lr')
+
+        @tf.custom_gradient
+        def func(x):
+            y = tf.maximum(x, 0)
+
+            @tf.custom_gradient
+            def grad(dy):
+                dx = tf.where(y >= 0, dy, 0)
+                return dx, lambda ddx: tf.where(y >= 0, ddx, 0)
+
+            return y, grad
+
+        return func(x)
+
 
 def act(x, activation, param=None):
     if activation == 'leaky_relu':
@@ -160,7 +179,8 @@ def act(x, activation, param=None):
     elif activation == 'linear':
         return x
     elif activation == 'relu':
-        return x #TODO - what to put here ?
+        assert param is not None
+        return relu(x, alpha_lr=param)
     else:
         raise ValueError(f"Unknown activation {activation}")
 
@@ -212,7 +232,7 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
     return filters
 
 
-def to_rgb(x, channels=1, activation='linear'):
+def to_rgb(x, channels=1, activation='relu'):
     x = conv3d(x, channels, (1, 1, 1), activation)
     x = apply_bias(x)
     x = act(x, activation, param=param)
