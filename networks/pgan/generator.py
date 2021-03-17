@@ -67,7 +67,7 @@ def generator(x, alpha, phase, num_phases, base_dim, base_shape, activation, par
                 x = generator_block(x, filters_out, activation=activation, param=param)
 
         with tf.variable_scope(f'to_rgb_{phase}'):
-            x_out = to_rgb(x, channels=base_shape[0], activation=activation)
+            x_out = to_rgb(x, channels=base_shape[0])
 
         if x_upsample is not None:
             x_out = alpha * x_upsample + (1 - alpha) * x_out
