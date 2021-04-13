@@ -30,8 +30,13 @@ def forward_generator(generator,
     energy_input_tensor = tf.reshape(energy_input, [z_batch_size,1])   # need z_batch_size x 1
     ang_input_tensor = tf.reshape(ang_input, [z_batch_size,1])   # need z_batch_size x 1
 
-    z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
-    z = tf.concat([z, energy_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)
+    #z = tf.random.normal(shape=[z_batch_size, latent_dim-2])
+    #z = tf.concat([z, energy_input_tensor, ang_input_tensor], 1)    # shape = (z_batch_size, 256)
+    
+    #try concatenating angle and then multiplying by energy?
+    z = tf.random.normal(shape=[z_batch_size, latent_dim-1])
+    z = tf.concat([z, ang_input_tensor], 1) 
+    z = tf.math.multiply(energy_input_tensor, z)   #try multiplying the latent space by the energy...tf.math.multiply should take care of broadcasting
     #anglepgan#emmac END
     
     gen_sample = generator(z, alpha, phase, num_phases,
