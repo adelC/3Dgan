@@ -143,12 +143,25 @@ def forward_discriminator(generator,
     print(f"ANGLEPGAN DEBUG ### : slopes={slopes}, slopes.shape={slopes.shape}")
 
     if loss_fn == 'wgan':
-        # has the real/fake activation layer built in, as a critic that rates. Allows you to move far away and still get a good gradient
         gradient_penalty = (slopes - 1) ** 2
         gp_loss = gp_weight * gradient_penalty
         disc_loss = disc_fake_d - disc_real
         drift_loss = 1e-3 * disc_real ** 2
+        
+        ang_loss = mae(real_ang, fake_ang)
+        ang_loss = tf.expand_dims(ang_loss, 1)  #remove?
+        ang_loss = tf.reduce_mean(ang_loss)   #remove?
+
+        ecal_loss = mape(real_ecal, fake_ecal) 
+        ecal_loss = tf.expand_dims(ecal_loss, 1)   #remove?
+        ecal_loss = tf.reduce_mean(ecal_loss)   #remove?
+        
+        # Add in the dropped loss terms? (Gul Rukh originally dropped, but Sofia is interested in)
+        # Weight the angle and ecal loss terms? Probably need to scale them, #TODO testing or optuna to see optimal weights
+
         disc_loss = tf.reduce_mean(disc_loss + gp_loss + drift_loss)
+        disc_loss = disc_loss + ang_loss + ecal_loss #Should we instead add it within line 162 and remove lines 153 & 157?
+        gen_loss = -tf.reduce_mean(disc_fake_g)
 
     elif loss_fn == 'logistic':
         gradient_penalty = tf.reduce_mean(slopes ** 2)
@@ -246,7 +259,20 @@ def forward_simultaneous(generator,
         gp_loss = gp_weight * gradient_penalty
         disc_loss = disc_fake_d - disc_real
         drift_loss = 1e-3 * disc_real ** 2
+        
+        ang_loss = mae(real_ang, fake_ang)
+        ang_loss = tf.expand_dims(ang_loss, 1)  #remove?
+        ang_loss = tf.reduce_mean(ang_loss)   #remove?
+
+        ecal_loss = mape(real_ecal, fake_ecal) 
+        ecal_loss = tf.expand_dims(ecal_loss, 1)   #remove?
+        ecal_loss = tf.reduce_mean(ecal_loss)   #remove?
+        
+        # Add in the dropped loss terms? (Gul Rukh originally dropped, but Sofia is interested in)
+        # Weight the angle and ecal loss terms? Probably need to scale them, #TODO testing or optuna to see optimal weights
+
         disc_loss = tf.reduce_mean(disc_loss + gp_loss + drift_loss)
+        disc_loss = disc_loss + ang_loss + ecal_loss #Should we instead add it within line 274 and remove lines 265 & 269?
         gen_loss = -tf.reduce_mean(disc_fake_g)
 
     elif loss_fn == 'logistic':
