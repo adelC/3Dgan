@@ -3,7 +3,6 @@ import time
 
 
 def generator_in(x, filters, shape, activation, param=None):
-
     with tf.variable_scope('dense'):
         x = dense(x, np.product(shape) * filters, activation, param=param)
         x = apply_bias(x)
@@ -43,11 +42,11 @@ def generator_block(x, filters_out, activation, param=None):
     return x
 
 
-def generator(x, alpha, phase, num_phases, base_dim, base_shape, activation, param=None, size='medium', is_reuse=False, conditioning=None):
-
+def generator(x, alpha, phase, num_phases, base_dim, base_shape, activation, param=None, size='medium', is_reuse=False,
+              conditioning=None):
     if conditioning is not None:
         raise NotImplementedError()
-        
+
     with tf.variable_scope('generator') as scope:
 
         if is_reuse:

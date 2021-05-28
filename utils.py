@@ -60,12 +60,12 @@ def print_summary_to_stdout(global_step, in_phase_step, img_s, local_img_s, d_lo
           f"img/s/worker {local_img_s:.3f} \t"
           f"d_loss {d_loss:.4f} \t "
           f"g_loss {g_loss:.4f} \t "
-           f"d_loss {a_loss:.4f} \t "
-          f"g_loss {e_loss:.4f} \t "
+          f"a_loss {a_loss} \t "
+          f"e_loss {e_loss} \t "
           f"d_lr {d_lr_val:.5f} \t"
           f"g_lr {g_lr_val:.5f} \t"
-          # f"memory {memory_percentage:.4f} % \t"
           f"alpha {alpha.eval():.2f}")
+          # f"memory {memory_percentage:.4f} % \t"
 
 
 def restore_variables(sess, phase, starting_phase, logdir, continue_path, var_list, verbose):

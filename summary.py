@@ -9,7 +9,7 @@ def create_training_props_summary(alpha, g_lr, d_lr):
     Parameters
         alpha: mixing factor alpha
         g_lr: generator learning rate
-        d_lr: discriminator learning rate
+        d_lr: discriminatorimg/s/worker learning rate
     Returns
         summary op
     """

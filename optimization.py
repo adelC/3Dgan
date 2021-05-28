@@ -34,8 +34,11 @@ def minimize_with_clipping(optimizer, loss, var_list, clipping):
 
     return train_op, gradients, variables, max_norm
 
-def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_image_input, energy_input, ang_input,latent_dim, alpha, phase,
-    num_phases, base_dim, base_shape, activation, leakiness, network_size, loss_fn, loss_weights, gp_weight, optim_strategy, g_clipping, d_clipping, noise_stddev):
+
+def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_image_input, energy_input, ang_input,
+                  latent_dim, alpha, phase,
+                  num_phases, base_dim, base_shape, activation, leakiness, network_size, loss_fn, loss_weights,
+                  gp_weight, optim_strategy, g_clipping, d_clipping, noise_stddev):
     """Defines the op for a single optimization step.
     Parameters:
         optimizer_gen:
@@ -94,17 +97,19 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
             network_size,
             loss_fn,
             gp_weight,
-            loss_weights,  #anglepgan#emmac
-            energy_input,   #anglepgan#emmac
-            ang_input,     #anglepgan#emmac
+            loss_weights,  # anglepgan#emmac
+            energy_input,  # anglepgan#emmac
+            ang_input,  # anglepgan#emmac
             noise_stddev
         )
 
         gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-        train_gen, g_gradients, g_variables, max_g_norm = minimize_with_clipping(optimizer_gen, gen_loss, gen_vars, g_clipping)
+        train_gen, g_gradients, g_variables, max_g_norm = minimize_with_clipping(optimizer_gen, gen_loss, gen_vars,
+                                                                                 g_clipping)
 
         disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-        train_disc, d_gradients, d_variables, max_d_norm = minimize_with_clipping(optimizer_disc, disc_loss, disc_vars, d_clipping)
+        train_disc, d_gradients, d_variables, max_d_norm = minimize_with_clipping(optimizer_disc, disc_loss, disc_vars,
+                                                                                  d_clipping)
 
     # Perform forward steps of discriminator and generator alternatingly
     elif optim_strategy == 'alternate':
@@ -124,15 +129,16 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
             network_size,
             loss_fn,
             gp_weight,
-            loss_weights,  #anglepgan#emmac
-            enery_input,   #anglepgan#emmac
-            ang_input,     #anglepgan#emmac
+            loss_weights,  # anglepgan#emmac
+            enery_input,  # anglepgan#emmac
+            ang_input,  # anglepgan#emmac
             noise_stddev
             # conditioning=real_label
         )
 
         disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-        train_disc, d_gradients, d_variables, max_d_norm = minimize_with_clipping(optimizer_disc, disc_loss, disc_vars, d_clipping)
+        train_disc, d_gradients, d_variables, max_d_norm = minimize_with_clipping(optimizer_disc, disc_loss, disc_vars,
+                                                                                  d_clipping)
 
         with tf.control_dependencies([train_disc]):
             gen_sample, gen_loss = forward_generator(
@@ -149,15 +155,16 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
                 leakiness,
                 network_size,
                 loss_fn,
-                loss_weights,  #anglepgan#emmac
-                enery_input,   #anglepgan#emmac
-                ang_input,     #anglepgan#emmac
+                loss_weights,  # anglepgan#emmac
+                enery_input,  # anglepgan#emmac
+                ang_input,  # anglepgan#emmac
                 noise_stddev,
                 is_reuse=True
             )
 
             gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-            train_gen, g_gradients, g_variables, max_g_norm = minimize_with_clipping(optimizer_gen, gen_loss, gen_vars, g_clipping)
+            train_gen, g_gradients, g_variables, max_g_norm = minimize_with_clipping(optimizer_gen, gen_loss, gen_vars,
+                                                                                     g_clipping)
 
     else:
         raise ValueError("Unknown optim strategy ", optim_strategy)
@@ -165,6 +172,8 @@ def optimize_step(optimizer_gen, optimizer_disc, generator, discriminator, real_
     return train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm
 
     # Op to update the learning rate according to a schedule
+
+
 def lr_update(lr, intra_phase_step, steps_per_phase, lr_max, lr_increase, lr_decrease, lr_rise_niter, lr_decay_niter):
     """Op that updates the learning rate according to a schedule.
     Args:
@@ -195,28 +204,29 @@ def lr_update(lr, intra_phase_step, steps_per_phase, lr_max, lr_increase, lr_dec
         remaining_steps = tf.subtract(steps_per_phase, intra_phase_step)
 
         # Define the different functions
-        def update_increase_lin ():
+        def update_increase_lin():
             return tf.multiply(
-                               tf.cast(tf.truediv(intra_phase_step, lr_rise_niter), tf.float32),
-                               lr_max
-                               )
+                tf.cast(tf.truediv(intra_phase_step, lr_rise_niter), tf.float32),
+                lr_max
+            )
+
         def update_increase_exp():
             return tf.multiply(
-                                a,
-                                tf.math.exp(tf.multiply(b_rise, tf.cast(intra_phase_step, tf.float32)))
-                                )
+                a,
+                tf.math.exp(tf.multiply(b_rise, tf.cast(intra_phase_step, tf.float32)))
+            )
 
         def update_decrease_lin():
             return tf.multiply(
-                               tf.cast(tf.truediv(remaining_steps, lr_decay_niter), tf.float32),
-                               lr_max
-                               )
+                tf.cast(tf.truediv(remaining_steps, lr_decay_niter), tf.float32),
+                lr_max
+            )
 
         def update_decrease_exp():
             return tf.multiply(
-                                a,
-                                tf.math.exp(tf.multiply(b_decay, tf.cast(remaining_steps, tf.float32)))
-                                )
+                a,
+                tf.math.exp(tf.multiply(b_decay, tf.cast(remaining_steps, tf.float32)))
+            )
 
         def no_op():
             return lr_update
@@ -227,12 +237,12 @@ def lr_update(lr, intra_phase_step, steps_per_phase, lr_max, lr_increase, lr_dec
         elif lr_increase == 'exponential':
             # Are we in the increasing part? Return update_increase_exp function (else, keep update_lr unchanged)
             lr_update = tf.cond(intra_phase_step < lr_rise_niter, update_increase_exp, no_op)
-            
+
         if lr_decrease == 'linear':
             # Are we in the decreasing part? Return return update_decrease function (else, keep update_lr unchanged)
-            lr_update = tf.cond(intra_phase_step > step_decay_start, update_decrease_lin, no_op) 
+            lr_update = tf.cond(intra_phase_step > step_decay_start, update_decrease_lin, no_op)
         elif lr_decrease == 'exponential':
             # Are we in the decreasing part? Return return update_decrease function (else, keep update_lr unchanged)
-            lr_update = tf.cond(intra_phase_step > step_decay_start, update_decrease_exp, no_op) 
- 
+            lr_update = tf.cond(intra_phase_step > step_decay_start, update_decrease_exp, no_op)
+
     return lr.assign(lr_update)

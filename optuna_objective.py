@@ -35,9 +35,9 @@ def optuna_objective(trial, args, config):
     run_from_best_trial = (args.optuna_use_best_trial and (args.optuna_storage is not None))
     hyperparam_opt_inter_trial = args.optuna_distributed and not run_from_best_trial
     hyperparam_opt_intra_trial = (args.optuna_storage is not None) and (args.optuna_study_name is not None) and not (
-                run_from_best_trial or hyperparam_opt_inter_trial)
+            run_from_best_trial or hyperparam_opt_inter_trial)
     normal_run = (not run_from_best_trial) and (not hyperparam_opt_inter_trial) and not (
-                run_from_best_trial or hyperparam_opt_inter_trial or hyperparam_opt_intra_trial)
+            run_from_best_trial or hyperparam_opt_inter_trial or hyperparam_opt_intra_trial)
 
     # Store the last fid so that it can be returned to optuna
     last_fid = None
@@ -90,19 +90,18 @@ def optuna_objective(trial, args, config):
 
     var_list = list()
     global_step = 0
-    
-    #anglepgan#ach
+
+    # anglepgan#ach
     energy_path = os.path.join(args.dataset_path, f'en/')
     ang_path = os.path.join(args.dataset_path, 'ang/')
     ecal_path = os.path.join(args.dataset_path, 'ecal/')
-    
-    
-    #anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent 
+
+    # anglepgan #ach : reading en, ang and ecal once, so out of the loop, not phase dependent
     npy_energy = NumpyPathDataset(energy_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
-    #anglepgan#ach
+    # anglepgan#ach
     npy_ang = NumpyPathDataset(ang_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
-        
-    #anglepgan#ach
+
+    # anglepgan#ach
     npy_ecal = NumpyPathDataset(ecal_path, args.scratch_path, copy_files=hvd.rank() == 0, is_correct_phase=True)
 
     # Loop over the different phases (resolutions) of training of a progressive architecture
@@ -130,22 +129,30 @@ def optuna_objective(trial, args, config):
         # That may or may not make much sense, depending on whether there is correlation between your samples!
         # For the medical CT scans there was: some scans are from the same patient, and usually have consequtive numbering.
         # By splitting this way, we avoid as much as possible that correlated scans end up in both training and validation sets.
-        npy_data_train, npy_data_testval = npy_data.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
-        npy_data_validation, npy_data_test = npy_data_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        npy_data_train, npy_data_testval = npy_data.split_by_fraction(
+            1 - (args.validation_fraction + args.test_fraction))
+        npy_data_validation, npy_data_test = npy_data_testval.split_by_fraction(
+            args.validation_fraction / (args.validation_fraction + args.test_fraction))
 
-        #ach #anglepgan - Begin
-        npy_energy_train, npy_energy_testval = npy_energy.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
-        npy_energy_validation, npy_energy_test = npy_energy_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        # ach #anglepgan - Begin
+        npy_energy_train, npy_energy_testval = npy_energy.split_by_fraction(
+            1 - (args.validation_fraction + args.test_fraction))
+        npy_energy_validation, npy_energy_test = npy_energy_testval.split_by_fraction(
+            args.validation_fraction / (args.validation_fraction + args.test_fraction))
 
         npy_ang_train, npy_ang_testval = npy_ang.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
-        npy_ang_validation, npy_ang_test = npy_ang_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        npy_ang_validation, npy_ang_test = npy_ang_testval.split_by_fraction(
+            args.validation_fraction / (args.validation_fraction + args.test_fraction))
 
-        npy_ecal_train, npy_ecal_testval = npy_ecal.split_by_fraction(1 - (args.validation_fraction + args.test_fraction))
-        npy_ecal_validation, npy_ecal_test = npy_ecal_testval.split_by_fraction(args.validation_fraction / (args.validation_fraction + args.test_fraction))
-        #ach #anglepgan - End
+        npy_ecal_train, npy_ecal_testval = npy_ecal.split_by_fraction(
+            1 - (args.validation_fraction + args.test_fraction))
+        npy_ecal_validation, npy_ecal_test = npy_ecal_testval.split_by_fraction(
+            args.validation_fraction / (args.validation_fraction + args.test_fraction))
+        # ach #anglepgan - End
 
         if verbose:
-            print(f"Split dataset of {len(npy_data)} samples: train {len(npy_data_train)}, validation {len(npy_data_validation)}, test {len(npy_data_test)}")
+            print(
+                f"Split dataset of {len(npy_data)} samples: train {len(npy_data_train)}, validation {len(npy_data_validation)}, test {len(npy_data_test)}")
 
         # Get DataLoader
         batch_size = max(1, args.base_batch_size // (2 ** (phase - 1)))
@@ -160,23 +167,24 @@ def optuna_objective(trial, args, config):
         num_metric_samples = get_num_metric_samples(args.num_metric_samples, batch_size, global_size)
 
         # Create input tensor
-        real_image_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
-        
-        #anglepgan #ach - creating imput tensor for en ang ang (dataset used to condition the GAN training) #ToDo
-        #energy_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
-        #angle_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
-        
-        #anglepgan #ach
+        real_image_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape),
+                                          dtype=tf.float32)  # TODO check shape function
+
+        # anglepgan #ach - creating imput tensor for en ang ang (dataset used to condition the GAN training) #ToDo
+        # energy_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
+        # angle_input = tf.placeholder(shape=get_current_input_shape(phase, batch_size, args.start_shape), dtype=tf.float32) #TODO check shape function
+
+        # anglepgan #ach
         energy_shape = [batch_size, 1]
         ang_shape = [batch_size, 1]
         energy_input = tf.placeholder(shape=energy_shape, dtype=tf.float32, name="energy_input")
         ang_input = tf.placeholder(shape=ang_shape, dtype=tf.float32, name="ang_input")
-        #anglepgan #ach
-        
+        # anglepgan #ach
+
         real_label = None
         if real_label is not None:
             real_label = tf.one_hot(real_label, depth=args.num_labels)
-            
+
         # ------------------------------------------------------------------------------------------#
         # OPTIMIZERS
 
@@ -235,7 +243,7 @@ def optuna_objective(trial, args, config):
         assign_starting_alpha = alpha.assign(args.starting_alpha)
         assign_zero = alpha.assign(0)
 
-        #Caspar changes structure and uses new helper functions like get_num_phases #TODO check this runs smoothly
+        # Caspar changes structure and uses new helper functions like get_num_phases #TODO check this runs smoothly
         # Performs a forward pass, computes gradients, clips them (if desired), and then applies them.
         # Supports simultaneous forward pass of generator and discriminator, or alternatingly (discriminator first)
         train_gen, train_disc, gen_loss, disc_loss, gp_loss, gen_sample, ang_loss, ecal_loss, g_gradients, g_variables, d_gradients, d_variables, max_g_norm, max_d_norm = opt.optimize_step(
@@ -244,8 +252,8 @@ def optuna_objective(trial, args, config):
             generator,
             discriminator,
             real_image_input,
-            energy_input,  #TODO #anglepgan #ach check placement
-            ang_input, #TODO #anglepgan #ach check placement
+            energy_input,  # TODO #anglepgan #ach check placement
+            ang_input,  # TODO #anglepgan #ach check placement
             args.latent_dim,
             alpha,
             phase,
@@ -308,7 +316,7 @@ def optuna_objective(trial, args, config):
         # Other ops
 
         init_op = tf.global_variables_initializer()
-        #TODO check #Caspar's removal of assign_starting_alpha and assign_zero
+        # TODO check #Caspar's removal of assign_starting_alpha and assign_zero
         # Probably these alpha ops could be with the other ops above, but... it changes reproducibility of my runs. So for now, I'll leave them here.
 
         broadcast = hvd.broadcast_global_variables(0)
@@ -319,7 +327,7 @@ def optuna_objective(trial, args, config):
             # sess.graph.finalize()
             sess.run(init_op)
 
-            #Caspar cut this section down a lot #TODO check that it runs smoothly (adel/pgan/main l484-504)
+            # Caspar cut this section down a lot #TODO check that it runs smoothly (adel/pgan/main l484-504)
             # Do variables need to be restored? (either from the previous phase, or from a previous run)
             if (phase > args.starting_phase) or (args.continue_path and phase == args.starting_phase):
                 restore_variables(sess, phase, args.starting_phase, logdir, args.continue_path, var_list, verbose)
@@ -363,7 +371,7 @@ def optuna_objective(trial, args, config):
             # ------------------------------------------------------------------------------------------#
             # Training loop for mixing phase
 
-            #Caspar added #TODO check it works
+            # Caspar added #TODO check it works
             # Do we start with a mixing phase? (normally we do, unless we resume e.g. from a point in the stabilization phase)
             if args.mixing_nimg > 0:
                 mixing_bool = True
@@ -392,16 +400,18 @@ def optuna_objective(trial, args, config):
 
                 # Get randomly selected batch
                 batch = npy_data_train.batch(batch_size)
-                
-                #anglepgan #ach
+
+                # anglepgan #ach
                 batch_energy_train = npy_energy_train.batch(batch_size)
                 batch_ang_train = npy_ang_train.batch(batch_size)
                 batch_ecal_train = npy_ecal_train.batch(batch_size)
-            
-                # Normalize data (but only if args.data_mean AND args.data_stddev are defined
-                batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
 
-                # Normalize data (but only if args.data_mean AND args.data_stddev are defined)
+                # print("batch type :", type(batch))
+                # print("batch energy type :", type(batch_energy_train))
+                # print("batch ang type :", type(batch_ang_train))
+                # print("batch ecal type :", type(batch_ecal_train))
+
+                # Normalize data (but only if args.data_mean AND args.data_stddev are defined
                 batch = data.normalize_numpy(batch, args.data_mean, args.data_stddev, verbose)
 
                 # if args.horovod:
@@ -424,14 +434,14 @@ def optuna_objective(trial, args, config):
                     _, _, summary_props, summary_s, summary_l, d_loss, g_loss, a_loss, e_loss = sess.run(
                         [train_gen, train_disc, summary_training_props, summary_small_with_gradients, summary_large,
                          disc_loss, gen_loss, ang_loss, ecal_loss], feed_dict={real_image_input: batch,
-                              energy_input : batch_energy_train, ang_input :
-                              batch_ang_train})
+                                                                               energy_input: batch_energy_train,
+                                                                               ang_input: batch_ang_train})
                 elif small_summary_bool:
                     _, _, summary_props, summary_s, d_loss, g_loss, a_loss, e_loss = sess.run(
                         [train_gen, train_disc, summary_training_props, summary_small_with_gradients,
                          disc_loss, gen_loss, ang_loss, ecal_loss], feed_dict={real_image_input: batch,
-                              energy_input : batch_energy_train, ang_input :
-                              batch_ang_train})
+                                                                               energy_input: batch_energy_train,
+                                                                               ang_input: batch_ang_train})
                 else:
                     _, _, d_loss, g_loss, a_loss, e_loss = sess.run(
                         [train_gen, train_disc, disc_loss, gen_loss, ang_loss, ecal_loss],
@@ -444,26 +454,26 @@ def optuna_objective(trial, args, config):
                 # Run validation loss
                 if large_summary_bool or small_summary_bool:
                     batch_val = npy_data_validation.batch(batch_size)
-                    
-                    #anglepgan #ach #ToDo
+
+                    # anglepgan #ach #ToDo
                     batch_energy_val = npy_energy_validation.batch(batch_size)
                     batch_ang_val = npy_ang_validation.batch(batch_size)
                     batch_ecal_val = npy_ecal_validation.batch(batch_size)
-                  
+
                     batch_val = data.normalize_numpy(batch_val, args.data_mean, args.data_stddev, verbose)
                     # Compute validation loss on training weights (noisy)
                     summary_s_val = sess.run(summary_small_validation,
-                            feed_dict={real_image_input: batch_val, energy_input :
-                                batch_energy_val, ang_input : batch_ang_val})
+                                             feed_dict={real_image_input: batch_val, energy_input:
+                                                 batch_energy_val, ang_input: batch_ang_val})
                     # Compute train loss on ema weights (less noisy)
                     sess.run(assign_ema_weights)  # Takes only ~ 2 ms
                     summary_s_val_ema = sess.run(summary_small_EMA,
-                            feed_dict={real_image_input: batch, energy_input:
-                            batch_energy_train, ang_input: batch_ang_train})
+                                                 feed_dict={real_image_input: batch, energy_input:
+                                                     batch_energy_train, ang_input: batch_ang_train})
                     if large_summary_bool:
                         summary_l_ema = sess.run(summary_large_EMA,
-                                feed_dict={real_image_input: batch, energy_input:
-                            batch_energy_train, ang_input: batch_ang_train})
+                                                 feed_dict={real_image_input: batch, energy_input:
+                                                     batch_energy_train, ang_input: batch_ang_train})
                     sess.run(restore_original_weights)
 
                 # print("Completed step")
@@ -483,13 +493,15 @@ def optuna_objective(trial, args, config):
                     if args.calc_metrics:
                         # if verbose:
                         # print('Computing and writing metrics...')
-                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, batch_energy_train, batch_ang_train, args.metrics_batch_size,
+                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, batch_energy_train,
+                                               batch_ang_train, args.metrics_batch_size,
                                                global_size, global_step, get_xy_dim(phase, args.start_shape),
                                                args.horovod, get_compute_metrics_dict(args), num_metric_samples,
                                                args.data_mean, args.data_stddev, verbose)
                         # Compute and save metrics based on EMA weights
                         sess.run(assign_ema_weights)
-                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample,  batch_energy_train, batch_ang_train, args.metrics_batch_size,
+                        metrics = save_metrics(writer, sess, npy_data_validation, gen_sample, batch_energy_train,
+                                               batch_ang_train, args.metrics_batch_size,
                                                global_size, global_step, get_xy_dim(phase, args.start_shape),
                                                args.horovod, get_compute_metrics_dict(args), num_metric_samples,
                                                args.data_mean, args.data_stddev, verbose, suffix='_EMA')
@@ -586,7 +598,8 @@ def optuna_objective(trial, args, config):
 
             if args.compute_metrics_test:
                 start_metrics_test = time.time()
-                metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, batch_energy_test, batch_ang_test, args.metrics_batch_size, global_size,
+                metrics_test = save_metrics(None, sess, npy_data_test, gen_sample, batch_energy_test, batch_ang_test,
+                                            args.metrics_batch_size, global_size,
                                             global_step, get_xy_dim(phase, args.start_shape), args.horovod,
                                             get_compute_metrics_dict(args), len(npy_data_test), args.data_mean,
                                             args.data_stddev, verbose)
@@ -597,7 +610,8 @@ def optuna_objective(trial, args, config):
                     print(metrics_test)
             if args.compute_metrics_validation:
                 start_metrics_val = time.time()
-                metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, batch_energy_val, batch_ang_val, args.metrics_batch_size,
+                metrics_val = save_metrics(None, sess, npy_data_validation, gen_sample, batch_energy_val, batch_ang_val,
+                                           args.metrics_batch_size,
                                            global_size, global_step, get_xy_dim(phase, args.start_shape), args.horovod,
                                            get_compute_metrics_dict(args), len(npy_data_validation), args.data_mean,
                                            args.data_stddev, verbose)
@@ -610,7 +624,8 @@ def optuna_objective(trial, args, config):
                 last_fid = metrics_val['FID']
             if args.compute_metrics_train:
                 start_metrics_train = time.time()
-                metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, batch_energy_train, batch_ang_train, args.metrics_batch_size,
+                metrics_train = save_metrics(None, sess, npy_data_train, gen_sample, batch_energy_train,
+                                             batch_ang_train, args.metrics_batch_size,
                                              global_size, global_step, get_xy_dim(phase, args.start_shape),
                                              args.horovod, get_compute_metrics_dict(args), len(npy_data_train),
                                              args.data_mean, args.data_stddev, verbose)
@@ -631,6 +646,10 @@ def optuna_objective(trial, args, config):
                         f"Trial: {trial.number}, Parameters: {trial.params}, global_step: {global_step}, FID: {last_fid}")
 
             if args.ending_phase:
+                # if hvd.rank() == 0:
+                #    fake_batch = sess.run(gen_sample, feed_dict={'energy_input:0': batch_energy_train, 'ang_input:0': batch_ang_train}).astype(np.float32)
+                #    images =  data.invert_normalize(fake_batch, args.data_mean, args.data_stddev, verbose)
+                #    np.save("./fake_images_{phase}.npy", images)
                 if phase == args.ending_phase:
                     print("Reached final phase, breaking.")
                     break

@@ -1,10 +1,11 @@
 import tensorflow as tf
 import numpy as np
 
+
 def alpha_update(alpha, mixing_nimg, starting_alpha, batch_size, global_size):
     """Alpha update operation. Will linearly make alpha decrease during the mixing phase, until it is zero at the end of the mixing phase.
     Parameters:
-        mixing_nimg: the amount of images to train on during the mixing phase. 
+        mixing_nimg: the amount of images to train on during the mixing phase.
         starting_alpha: the starting value of alpha. Normally one, but could be different if a training is resumed.
         batch_size: batch size (per worker, in case of data parallel training)
         global_size: number of workers in data parallel training (1 otherwise)
@@ -22,11 +23,13 @@ def alpha_update(alpha, mixing_nimg, starting_alpha, batch_size, global_size):
         alpha = alpha.assign(tf.maximum(alpha - alpha_update, 0))
     return alpha
 
+
 def k(x):
     if x < 3:
         return 1
     else:
         return 3
+
 
 def calculate_gain(activation, param=None):
     linear_fns = ['linear', 'conv1d', 'conv2d', 'conv3d', 'conv_transpose1d', 'conv_transpose2d', 'conv_transpose3d']
@@ -122,7 +125,6 @@ def conv3d(x, fmaps, kernel, activation, param=None, lrmul=1):
 
 
 def group_conv3d(x, filter, groups):
-
     inputs = tf.split(x, groups, axis=1)
     filters = tf.split(filter, groups, axis=-2)
     output = tf.concat(
@@ -152,8 +154,8 @@ def leaky_relu(x, alpha_lr=0.2):
 
         return func(x)
 
-    
-# to address the negative values, try relu in the last layer   
+
+# to address the negative values, try relu in the last layer
 def relu(x, alpha_lr=0.2):
     with tf.variable_scope('relu'):
         alpha_lr = tf.constant(alpha_lr, dtype=x.dtype, name='alpha_lr')
@@ -200,7 +202,7 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
         filter_list = [512, 512, 128, 128, 64, 32, 16, 8]
     elif size == 'm':
         filter_list = [1024, 1024, 256, 256, 128, 64, 32, 16]
-        #filter_list = [256, 256, 128, 64, 32, 16]
+        # filter_list = [256, 256, 128, 64, 32, 16]
     elif size == 'l':
         filter_list = [2048, 2048, 512, 512, 256, 128, 64, 32]
     elif size == 'xl':
@@ -214,19 +216,17 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
     # Take base_shape[1:] to cut of the number of input channels:
     # We want to determine number of filters based on spatial number of voxels; channels are irrelevant
 
-
-
     current_dim = [2 ** (phase - 1) * dim for dim in base_shape[1:]]
-    #print(f"DEBUG: base_shape={base_shape}, phase={phase}, current_dim={current_dim}")
+    # print(f"DEBUG: base_shape={base_shape}, phase={phase}, current_dim={current_dim}")
     log_product = np.log2(np.product(current_dim))
     # Filter lists were designed for dimensions where the 2-log is [4, 7, 10, ...]
-    reference_log = [4 + n * 3 for n in range(0,7)]
+    reference_log = [4 + n * 3 for n in range(0, 7)]
     # Map the index to the nearest reference log
     # E.g. for dimension [16, 16, 5] the product is 1280, log2(1280) = 10.32 which is closest
     # to 10, thus I get the third element from filter_list as the number of filters.
-    index = np.argmin(np.abs(np.array(reference_log)-log_product))
+    index = np.argmin(np.abs(np.array(reference_log) - log_product))
     filters = filter_list[index]
-    #print(f"DEBUG: log_product={log_product}, index={index}, filters={filters}")
+    # print(f"DEBUG: log_product={log_product}, index={index}, filters={filters}")
     # filters = filter_list[phase - 1]
     # print(f"DEBUG: returning num_filters: {filters}")
     return filters
@@ -235,7 +235,8 @@ def num_filters(phase, num_phases, base_shape, base_dim=None, size=None):
 def to_rgb(x, channels=1, activation='relu'):
     x = conv3d(x, channels, (1, 1, 1), activation)
     x = apply_bias(x)
-    x = act(x, activation, param=param)
+    # x = act(x, activation, param=None)
+    # x = tf.math.sigmoid(x)
     return x
 
 
