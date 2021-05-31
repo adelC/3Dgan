@@ -35,7 +35,7 @@ mpirun -bootstrap ssh -genv NCCL_DEBUG=INFO -genv HOROVOD_MPI_THREADS_DISABLE=1 
 --start_shape '(1, 2, 4, 4)' --final_shape '(1, 64, 128, 128)' \
 --scratch_path ~/scratch/CERN_anglegan/scratch/home/achaibi/ --logdir ~/scratch/applications/cern/4range01 \
 --horovod --num_inter_ops 1 --base_batch_size 128 --max_global_batch_size 2048 \
---starting_phase 1 --ending_phase 5 \
+--starting_phase 1 --ending_phase 5  --gpu \
 --latent_dim 256 --first_conv_nfilters 128 --network_size xs --starting_alpha 1 --loss_fn anglegan2 --gp_weight 10 --noise_stddev 0.01 \
 --d_lr 0.005298  --d_lr_increase=linear --d_lr_decrease=exponential --d_lr_rise_niter 32768 --d_lr_decay_niter 98304 \
 --g_lr 0.005408 --g_lr_increase=linear --g_lr_decrease=exponential --g_lr_rise_niter 65536 --g_lr_decay_niter 65536  \
