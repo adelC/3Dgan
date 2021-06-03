@@ -118,6 +118,8 @@ def create_large_summary(real_image_input, gen_sample, suffix=''):
     summary_large = []
 
     with tf.name_scope('summaries'):
+        #ACH - Tensorboard fixing the gray pixels
+        tf.clip_by_value(real_image_input[0], clip_value_min=0, clip_value_max=1000000)
         # Spread out 3D image as 2D grid, slicing in the z-dimension
         real_image_grid = tf.transpose(real_image_input[0], (1, 2, 3, 0))
         shape = real_image_grid.get_shape().as_list()
